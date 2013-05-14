@@ -7,7 +7,7 @@ using Duo;
 using System;
 using System.Collections.Generic;
 
-class DuoVerifyExample
+class DuoAdmin
 {
     static int Main(string[] args)
     {
