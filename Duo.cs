@@ -42,7 +42,7 @@ namespace Duo
                                          HttpUtility.UrlEncode(pair.Value));
                 // Signatures require upper-case hex digits.
                 p = Regex.Replace(p,
-                                  "(%[0-9a-f][0-9a-f])",
+                                  "(%[0-9A-Fa-f][0-9A-Fa-f])",
                                   c => c.Value.ToUpper());
                 // Escape only the expected characters.
                 p = Regex.Replace(p,
