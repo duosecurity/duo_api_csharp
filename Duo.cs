@@ -114,7 +114,6 @@ namespace Duo
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
             request.Method = method;
             request.Accept = "application/json";
-            request.Host = this.host;
             request.Headers.Add("Authorization: " + auth);
 
             // Use reflection (or .NET 4's request.Date property) to
