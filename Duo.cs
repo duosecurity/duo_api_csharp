@@ -114,7 +114,7 @@ namespace Duo
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
             request.Method = method;
             request.Accept = "application/json";
-            request.Headers.Add("Authorization: " + auth);
+            request.Headers.Add("Authorization", auth);
             request.Headers.Add("X-Duo-Date", date);
 
             if (method.Equals("POST") || method.Equals("PUT"))
