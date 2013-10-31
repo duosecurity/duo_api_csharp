@@ -115,17 +115,7 @@ namespace Duo
             request.Method = method;
             request.Accept = "application/json";
             request.Headers.Add("Authorization: " + auth);
-
-            // Use reflection (or .NET 4's request.Date property) to
-            // overwrite the generated Date header. It must parse to
-            // the exact same timestamp used when signing.
-            Type type = request.Headers.GetType();
-            MethodInfo add_method
-                = type.GetMethod("AddWithoutValidate",
-                                 (BindingFlags.Instance
-                                  | BindingFlags.NonPublic));
-            add_method.Invoke(request.Headers,
-                              new[] { "Date", date });
+            request.Headers.Add("X-Duo-Date", date);
 
             if (method.Equals("POST") || method.Equals("PUT"))
             {
