@@ -94,6 +94,21 @@ namespace Duo
                               string path,
                               Dictionary<string, string> parameters)
         {
+            return ApiCall(method, path, parameters, 0);
+        }
+
+        /// <param name="timeout">The request timeout, in milliseconds.
+        /// Use caution if you choose to specify a timeout. Some API
+        /// calls (particularly in the Auth and Verify APIs) will not
+        /// return a response until an out-of-band authentication process
+        /// has completed; in some cases, this may take as much as a
+        /// small number of minutes.
+        /// </param>
+        public string ApiCall(string method,
+                              string path,
+                              Dictionary<string, string> parameters,
+                              int timeout)
+        {
             string canon_params = DuoApi.CanonicalizeParams(parameters);
             string query = "";
             if (! method.Equals("POST") && ! method.Equals("PUT"))
@@ -127,6 +142,10 @@ namespace Duo
                     requestStream.Write(data, 0, data.Length);
                 }
             }
+            if (timeout > 0)
+            {
+                request.Timeout = timeout;
+            }
 
             // Do the request and process the result.
             WebResponse response;
@@ -148,7 +167,23 @@ namespace Duo
                                 Dictionary<string, string> parameters)
             where T : class
         {
-            string res = this.ApiCall(method, path, parameters);
+            return JSONApiCall<T>(method, path, parameters, 0);
+        }
+
+        /// <param name="timeout">The request timeout, in milliseconds.
+        /// Use caution if you choose to specify a timeout. Some API
+        /// calls (particularly in the Auth and Verify APIs) will not
+        /// return a response until an out-of-band authentication process
+        /// has completed; in some cases, this may take as much as a
+        /// small number of minutes.
+        /// </param>
+        public T JSONApiCall<T>(string method,
+                                string path,
+                                Dictionary<string, string> parameters,
+                                int timeout)
+            where T : class
+        {
+            string res = this.ApiCall(method, path, parameters, timeout);
             var jss = new JavaScriptSerializer();
             var dict = jss.Deserialize<Dictionary<string, object>>(res);
             if (dict["stat"] as string == "OK")
