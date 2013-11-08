@@ -21,15 +21,22 @@ namespace Duo
         private string ikey;
         private string skey;
         private string host;
+        private string url_scheme;
 
         /// <param name="ikey">Duo integration key</param>
         /// <param name="skey">Duo secret key</param>
         /// <param name="host">Application secret key</param>
         public DuoApi(string ikey, string skey, string host)
+            : this(ikey, skey, host, "https")
+        {
+        }
+
+        protected DuoApi(string ikey, string skey, string host, string url_scheme)
         {
             this.ikey = ikey;
             this.skey = skey;
             this.host = host;
+            this.url_scheme = url_scheme;
         }
 
         public static string CanonicalizeParams(Dictionary<string, string> parameters)
@@ -94,7 +101,8 @@ namespace Duo
                               string path,
                               Dictionary<string, string> parameters)
         {
-            return ApiCall(method, path, parameters, 0);
+            HttpStatusCode statusCode;
+            return ApiCall(method, path, parameters, 0, out statusCode);
         }
 
         /// <param name="timeout">The request timeout, in milliseconds.
@@ -107,7 +115,8 @@ namespace Duo
         public string ApiCall(string method,
                               string path,
                               Dictionary<string, string> parameters,
-                              int timeout)
+                              int timeout,
+                              out HttpStatusCode statusCode)
         {
             string canon_params = DuoApi.CanonicalizeParams(parameters);
             string query = "";
@@ -118,7 +127,8 @@ namespace Duo
                     query = "?" + canon_params;
                 }
             }
-            string url = string.Format("https://{0}{1}{2}",
+            string url = string.Format("{0}://{1}{2}{3}",
+                                       this.url_scheme,
                                        this.host,
                                        path,
                                        query);
@@ -148,17 +158,22 @@ namespace Duo
             }
 
             // Do the request and process the result.
-            WebResponse response;
+            HttpWebResponse response;
             try
             {
-                response = request.GetResponse();
+                response = (HttpWebResponse)request.GetResponse();
             }
             catch (WebException ex)
             {
-                response = ex.Response;
+                response = (HttpWebResponse)ex.Response;
+                if (response == null)
+                {
+                    throw;
+                }
             }
             StreamReader reader
                 = new StreamReader(response.GetResponseStream());
+            statusCode = response.StatusCode;
             return reader.ReadToEnd();
         }
 
@@ -183,33 +198,48 @@ namespace Duo
                                 int timeout)
             where T : class
         {
-            string res = this.ApiCall(method, path, parameters, timeout);
+            HttpStatusCode statusCode;
+            string res = this.ApiCall(method, path, parameters, timeout, out statusCode);
+
             var jss = new JavaScriptSerializer();
-            var dict = jss.Deserialize<Dictionary<string, object>>(res);
-            if (dict["stat"] as string == "OK")
+
+            try
             {
-                return dict["response"] as T;
-            }
-            else
-            {
-                int? check = dict["code"] as int?;
-                int code;
-                if (check.HasValue)
+                var dict = jss.Deserialize<Dictionary<string, object>>(res);
+                if (dict["stat"] as string == "OK")
                 {
-                    code = check.Value;
+                    return dict["response"] as T;
                 }
                 else
                 {
-                    code = 0;
+                    int? check = dict["code"] as int?;
+                    int code;
+                    if (check.HasValue)
+                    {
+                        code = check.Value;
+                    }
+                    else
+                    {
+                        code = 0;
+                    }
+                    String message_detail = "";
+                    if (dict.ContainsKey("message_detail"))
+                    {
+                        message_detail = dict["message_detail"] as string;
+                    }
+                    throw new ApiException(code,
+                                           (int)statusCode,
+                                           dict["message"] as string,
+                                           message_detail);
                 }
-                String message_detail = "";
-                if (dict.ContainsKey("message_detail"))
-                {
-                    message_detail = dict["message_detail"] as string;
-                }
-                throw new ApiException(code,
-                                       dict["message"] as string,
-                                       message_detail);
+            }
+            catch (ApiException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                throw new BadResponseException((int)statusCode, e);
             }
         }
 
@@ -256,15 +286,34 @@ namespace Duo
     }
 
     [Serializable]
-    public class ApiException : Exception
+    public class DuoException : Exception
+    {
+        public int http_status { get; private set; }
+
+        public DuoException(int http_status)
+        {
+            this.http_status = http_status;
+        }
+
+        protected DuoException(System.Runtime.Serialization.SerializationInfo info,
+                               System.Runtime.Serialization.StreamingContext ctxt)
+            : base(info, ctxt)
+        { }
+    }
+
+    [Serializable]
+    public class ApiException : DuoException
     {
         public int code { get; private set; }
         public string message { get; private set; }
         public string message_detail { get; private set; }
 
         public ApiException(int code,
+                            int http_status,
                             string message,
-                            string message_detail) {
+                            string message_detail)
+            : base(http_status)
+        {
             this.code = code;
             this.message = message;
             this.message_detail = message_detail;
@@ -274,5 +323,23 @@ namespace Duo
                                System.Runtime.Serialization.StreamingContext ctxt)
             : base(info, ctxt)
         { }
+    }
+
+    [Serializable]
+    public class BadResponseException : DuoException
+    {
+        public Exception underlying_error { get; private set; }
+
+        public BadResponseException(int http_status, Exception underlying_error)
+            : base(http_status)
+        {
+            this.underlying_error = underlying_error;
+        }
+
+        protected BadResponseException(System.Runtime.Serialization.SerializationInfo info,
+                                       System.Runtime.Serialization.StreamingContext ctxt)
+            : base(info, ctxt)
+        { }
+
     }
 }
