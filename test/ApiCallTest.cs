@@ -209,6 +209,57 @@ public class TestApiCall
     }
 
     [Test]
+    public void TestPostParameterSigningCustomDate()
+    {
+        Dictionary<string, string> parameters = new Dictionary<string, string>
+        {
+            {"param1", "foo"},
+            {"param2", "bar"}
+        };
+
+        srv.handler = delegate(HttpListenerContext ctx)
+        {
+            if (ctx.Request.HttpMethod != "POST")
+            {
+                return "bad method!";
+            }
+            if (ctx.Request.Url.AbsolutePath != "/get_params")
+            {
+                return "bad path!";
+            }
+            string expected_body = DuoApi.CanonicalizeParams(parameters);
+            string actual_body = (new StreamReader(ctx.Request.InputStream)).ReadToEnd();
+            if (expected_body != actual_body)
+            {
+                return "bad post body!";
+            }
+
+            string date_header = ctx.Request.Headers["X-Duo-Date"];
+            if (date_header != "Mon, 11 Nov 2013 22:34:00 +0000")
+            {
+                return "bad date!";
+            }
+
+            // Sign() is itself tested elsewhere
+            string expected_signature = api.Sign(
+                "POST", "/get_params", expected_body, date_header);
+            string authorization = ctx.Request.Headers["Authorization"];
+            if (authorization != expected_signature)
+            {
+                return "bad signature";
+            }
+            return "OK";
+
+        };
+
+        DateTime date = new DateTime(2013, 11, 11, 22, 34, 00, DateTimeKind.Utc);
+        HttpStatusCode status_code;
+        string response = api.ApiCall("POST", "/get_params", parameters, 0, date, out status_code);
+        Assert.AreEqual("OK", response);
+    }
+
+
+    [Test]
     public void TestJsonTimeout()
     {
         srv.handler = delegate(HttpListenerContext ctx)

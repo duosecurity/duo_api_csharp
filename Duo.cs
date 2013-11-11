@@ -102,20 +102,41 @@ namespace Duo
                               Dictionary<string, string> parameters)
         {
             HttpStatusCode statusCode;
-            return ApiCall(method, path, parameters, 0, out statusCode);
+            return ApiCall(method, path, parameters, 0, DateTime.UtcNow, out statusCode);
         }
 
         /// <param name="timeout">The request timeout, in milliseconds.
-        /// Use caution if you choose to specify a timeout. Some API
+        /// Specify 0 to use the system-default timeout. Use caution if
+        /// you choose to specify a custom timeout - some API
         /// calls (particularly in the Auth and Verify APIs) will not
         /// return a response until an out-of-band authentication process
-        /// has completed; in some cases, this may take as much as a
-        /// small number of minutes.
-        /// </param>
+        /// has completed. In some cases, this may take as much as a
+        /// small number of minutes.</param>
         public string ApiCall(string method,
                               string path,
                               Dictionary<string, string> parameters,
                               int timeout,
+                              out HttpStatusCode statusCode)
+        {
+            return ApiCall(method, path, parameters, 0, DateTime.UtcNow, out statusCode);
+        }
+
+        /// <param name="date">The current date and time, used to authenticate
+        /// the API request. Typically, you should specify DateTime.UtcNow,
+        /// but if you do not wish to rely on the system-wide clock, you may
+        /// determine the current date/time by some other means.</param>
+        /// <param name="timeout">The request timeout, in milliseconds.
+        /// Specify 0 to use the system-default timeout. Use caution if
+        /// you choose to specify a custom timeout - some API
+        /// calls (particularly in the Auth and Verify APIs) will not
+        /// return a response until an out-of-band authentication process
+        /// has completed. In some cases, this may take as much as a
+        /// small number of minutes.</param>
+        public string ApiCall(string method,
+                              string path,
+                              Dictionary<string, string> parameters,
+                              int timeout,
+                              DateTime date,
                               out HttpStatusCode statusCode)
         {
             string canon_params = DuoApi.CanonicalizeParams(parameters);
@@ -133,14 +154,14 @@ namespace Duo
                                        path,
                                        query);
 
-            string date = DuoApi.DateToRFC822(DateTime.Now);
-            string auth = this.Sign(method, path, canon_params, date);
+            string date_string = DuoApi.DateToRFC822(date);
+            string auth = this.Sign(method, path, canon_params, date_string);
 
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
             request.Method = method;
             request.Accept = "application/json";
             request.Headers.Add("Authorization", auth);
-            request.Headers.Add("X-Duo-Date", date);
+            request.Headers.Add("X-Duo-Date", date_string);
 
             if (method.Equals("POST") || method.Equals("PUT"))
             {
@@ -182,24 +203,45 @@ namespace Duo
                                 Dictionary<string, string> parameters)
             where T : class
         {
-            return JSONApiCall<T>(method, path, parameters, 0);
+            return JSONApiCall<T>(method, path, parameters, 0, DateTime.UtcNow);
         }
 
         /// <param name="timeout">The request timeout, in milliseconds.
-        /// Use caution if you choose to specify a timeout. Some API
+        /// Specify 0 to use the system-default timeout. Use caution if
+        /// you choose to specify a custom timeout - some API
         /// calls (particularly in the Auth and Verify APIs) will not
         /// return a response until an out-of-band authentication process
-        /// has completed; in some cases, this may take as much as a
-        /// small number of minutes.
-        /// </param>
+        /// has completed. In some cases, this may take as much as a
+        /// small number of minutes.</param>
         public T JSONApiCall<T>(string method,
                                 string path,
                                 Dictionary<string, string> parameters,
                                 int timeout)
             where T : class
         {
+            return JSONApiCall<T>(method, path, parameters, timeout, DateTime.UtcNow);
+        }
+
+        /// <param name="date">The current date and time, used to authenticate
+        /// the API request. Typically, you should specify DateTime.UtcNow,
+        /// but if you do not wish to rely on the system-wide clock, you may
+        /// determine the current date/time by some other means.</param>
+        /// <param name="timeout">The request timeout, in milliseconds.
+        /// Specify 0 to use the system-default timeout. Use caution if
+        /// you choose to specify a custom timeout - some API
+        /// calls (particularly in the Auth and Verify APIs) will not
+        /// return a response until an out-of-band authentication process
+        /// has completed. In some cases, this may take as much as a
+        /// small number of minutes.</param>
+        public T JSONApiCall<T>(string method,
+                                string path,
+                                Dictionary<string, string> parameters,
+                                int timeout,
+                                DateTime date)
+            where T : class
+        {
             HttpStatusCode statusCode;
-            string res = this.ApiCall(method, path, parameters, timeout, out statusCode);
+            string res = this.ApiCall(method, path, parameters, timeout, date, out statusCode);
 
             var jss = new JavaScriptSerializer();
 
