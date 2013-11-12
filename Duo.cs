@@ -330,12 +330,12 @@ namespace Duo
     [Serializable]
     public class DuoException : Exception
     {
-        public int http_status { get; private set; }
+        public int HttpStatus { get; private set; }
 
         public DuoException(int http_status, string message, Exception inner)
             : base(message, inner)
         {
-            this.http_status = http_status;
+            this.HttpStatus = http_status;
         }
 
         protected DuoException(System.Runtime.Serialization.SerializationInfo info,
@@ -390,13 +390,13 @@ namespace Duo
 
         private static string FormatMessage(int http_status, Exception inner)
         {
-            string innerMessage = "(null)";
+            string inner_message = "(null)";
             if (inner != null)
             {
-                innerMessage = String.Format("{0}", inner.Message);
+                inner_message = String.Format("'{0}'", inner.Message);
             }
             return String.Format(
-                "Got error '{0}' with HTTP Status {1}", innerMessage, http_status);
+                "Got error {0} with HTTP Status {1}", inner_message, http_status);
         }
     }
 }
