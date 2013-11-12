@@ -332,7 +332,8 @@ namespace Duo
     {
         public int http_status { get; private set; }
 
-        public DuoException(int http_status)
+        public DuoException(int http_status, string message, Exception inner)
+            : base(message, inner)
         {
             this.http_status = http_status;
         }
@@ -346,42 +347,56 @@ namespace Duo
     [Serializable]
     public class ApiException : DuoException
     {
-        public int code { get; private set; }
-        public string message { get; private set; }
-        public string message_detail { get; private set; }
+        public int Code { get; private set; }
+        public string ApiMessage { get; private set; }
+        public string ApiMessageDetail { get; private set; }
 
         public ApiException(int code,
                             int http_status,
-                            string message,
-                            string message_detail)
-            : base(http_status)
+                            string api_message,
+                            string api_message_detail)
+            : base(http_status, FormatMessage(code, api_message, api_message_detail), null)
         {
-            this.code = code;
-            this.message = message;
-            this.message_detail = message_detail;
+            this.Code = code;
+            this.ApiMessage = api_message;
+            this.ApiMessageDetail = api_message_detail;
         }
 
         protected ApiException(System.Runtime.Serialization.SerializationInfo info,
                                System.Runtime.Serialization.StreamingContext ctxt)
             : base(info, ctxt)
         { }
+
+        private static string FormatMessage(int code,
+                                            string api_message,
+                                            string api_message_detail)
+        {
+            return String.Format(
+                "Duo API Error {0}: '{1}' ('{2}')", code, api_message, api_message_detail);
+        }
     }
 
     [Serializable]
     public class BadResponseException : DuoException
     {
-        public Exception underlying_error { get; private set; }
-
-        public BadResponseException(int http_status, Exception underlying_error)
-            : base(http_status)
-        {
-            this.underlying_error = underlying_error;
-        }
+        public BadResponseException(int http_status, Exception inner)
+            : base(http_status, FormatMessage(http_status, inner), inner)
+        { }
 
         protected BadResponseException(System.Runtime.Serialization.SerializationInfo info,
                                        System.Runtime.Serialization.StreamingContext ctxt)
             : base(info, ctxt)
         { }
 
+        private static string FormatMessage(int http_status, Exception inner)
+        {
+            string innerMessage = "(null)";
+            if (inner != null)
+            {
+                innerMessage = String.Format("{0}", inner.Message);
+            }
+            return String.Format(
+                "Got error '{0}' with HTTP Status {1}", innerMessage, http_status);
+        }
     }
 }
