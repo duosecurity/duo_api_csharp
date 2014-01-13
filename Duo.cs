@@ -18,25 +18,46 @@ namespace Duo
 {
     public class DuoApi
     {
+        public string DEFAULT_AGENT = "DuoAPICSharp/1.0";
+
         private string ikey;
         private string skey;
         private string host;
         private string url_scheme;
+        private string user_agent;
 
         /// <param name="ikey">Duo integration key</param>
         /// <param name="skey">Duo secret key</param>
         /// <param name="host">Application secret key</param>
         public DuoApi(string ikey, string skey, string host)
-            : this(ikey, skey, host, "https")
+            : this(ikey, skey, host, null)
         {
         }
 
-        protected DuoApi(string ikey, string skey, string host, string url_scheme)
+        /// <param name="ikey">Duo integration key</param>
+        /// <param name="skey">Duo secret key</param>
+        /// <param name="host">Application secret key</param>
+        /// <param name="user_agent">HTTP client User-Agent</param>
+        public DuoApi(string ikey, string skey, string host, string user_agent)
+            : this(ikey, skey, host, user_agent, "https")
+        {
+        }
+
+        protected DuoApi(string ikey, string skey, string host, string user_agent, string url_scheme)
         {
             this.ikey = ikey;
             this.skey = skey;
             this.host = host;
             this.url_scheme = url_scheme;
+
+            if (String.IsNullOrEmpty(user_agent))
+            {
+                this.user_agent = FormatUserAgent(DEFAULT_AGENT);
+            }
+            else
+            {
+                this.user_agent = user_agent;
+            }
         }
 
         public static string CanonicalizeParams(Dictionary<string, string> parameters)
@@ -162,6 +183,7 @@ namespace Duo
             request.Accept = "application/json";
             request.Headers.Add("Authorization", auth);
             request.Headers.Add("X-Duo-Date", date_string);
+            request.UserAgent = this.user_agent;
 
             if (method.Equals("POST") || method.Equals("PUT"))
             {
@@ -283,6 +305,16 @@ namespace Duo
             {
                 throw new BadResponseException((int)statusCode, e);
             }
+        }
+
+        /// Helper to format a User-Agent string with some information about
+        /// the operating system / .NET runtime
+        /// <param name="product_name">e.g. "FooClient/1.0"</param>
+        public static string FormatUserAgent(string product_name)
+        {
+           return String.Format(
+                "{0} ({1}; .NET {2})", product_name, System.Environment.OSVersion,
+                System.Environment.Version);
         }
 
         private string HmacSign(string data)

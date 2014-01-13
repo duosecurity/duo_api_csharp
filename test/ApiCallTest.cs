@@ -12,7 +12,11 @@ using NUnit.Framework;
 public class TestDuoApi : DuoApi
 {
     public TestDuoApi(string ikey, string skey, string host)
-        : base(ikey, skey, host, "http")
+        : base(ikey, skey, host, null, "http")
+    {
+    }
+    public TestDuoApi(string ikey, string skey, string host, string user_agent)
+        : base(ikey, skey, host, user_agent, "http")
     {
     }
 }
@@ -54,14 +58,27 @@ public class TestServer
 
         // process the request
         string path = request.Url.AbsolutePath;
-        string responseString = handler(context);
+        string responseString;
+
+        try
+        {
+            responseString = handler(context);
+        }
+        catch (Exception e)
+        {
+            responseString = e.ToString();
+        }
 
         // write the response
         HttpListenerResponse response = context.Response;
-        byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-        response.ContentLength64 = buffer.Length;
         System.IO.Stream output = response.OutputStream;
-        output.Write(buffer, 0, buffer.Length);
+
+        if (!String.IsNullOrEmpty(responseString))
+        {
+            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+            response.ContentLength64 = buffer.Length;
+            output.Write(buffer, 0, buffer.Length);
+        }
         output.Close();
 
         // shut down the listener
@@ -118,9 +135,39 @@ public class TestApiCall
         };
 
         HttpStatusCode code;
-        string response = api.ApiCall("GET", "/hello", new Dictionary<string, string>(), 0, out code);
+        string response = api.ApiCall("GET", "/hello", new Dictionary<string, string>(), 10000, out code);
         Assert.AreEqual(code, HttpStatusCode.OK);
         Assert.AreEqual(response, "Hello, World!");
+    }
+
+    [Test]
+    public void TestDefaultUserAgent()
+    {
+        srv.handler = delegate(HttpListenerContext ctx)
+        {
+            Console.WriteLine(String.Format("User-Agent is: {0}", ctx.Request.UserAgent));
+            return ctx.Request.UserAgent;
+        };
+
+        HttpStatusCode code;
+        string response = api.ApiCall("GET", "/DefaultUserAgent", new Dictionary<string, string>(), 10000, out code);
+        Assert.AreEqual(code, HttpStatusCode.OK);
+        StringAssert.StartsWith(api.DEFAULT_AGENT, response);
+    }
+
+    [Test]
+    public void TestCustomUserAgent()
+    {
+        api = new TestDuoApi(test_ikey, test_skey, test_host, "CustomUserAgent/1.0");
+        srv.handler = delegate(HttpListenerContext ctx)
+        {
+            return ctx.Request.UserAgent;
+        };
+
+        HttpStatusCode code;
+        string response = api.ApiCall("GET", "/CustomUserAgent", new Dictionary<string, string>(), 10000, out code);
+        Assert.AreEqual(code, HttpStatusCode.OK);
+        Assert.AreEqual("CustomUserAgent/1.0", response);
     }
 
     [Test]
@@ -161,7 +208,8 @@ public class TestApiCall
             
         };
 
-        string response = api.ApiCall("GET", "/get_params", parameters);
+        HttpStatusCode code;
+        string response = api.ApiCall("GET", "/get_params", parameters, 10000, out code);
         Assert.AreEqual("OK", response);
     }
 
@@ -204,7 +252,8 @@ public class TestApiCall
 
         };
 
-        string response = api.ApiCall("POST", "/get_params", parameters);
+        HttpStatusCode code;
+        string response = api.ApiCall("POST", "/get_params", parameters, 10000, out code);
         Assert.AreEqual("OK", response);
     }
 
@@ -254,7 +303,7 @@ public class TestApiCall
 
         DateTime date = new DateTime(2013, 11, 11, 22, 34, 00, DateTimeKind.Utc);
         HttpStatusCode status_code;
-        string response = api.ApiCall("POST", "/get_params", parameters, 0, date, out status_code);
+        string response = api.ApiCall("POST", "/get_params", parameters, 10000, date, out status_code);
         Assert.AreEqual("OK", response);
     }
 
