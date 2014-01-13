@@ -308,10 +308,10 @@ public class TestApiCall
         }
         catch (ApiException e)
         {
-            Assert.AreEqual(e.http_status, 400);
-            Assert.AreEqual(e.code, 40001);
-            Assert.AreEqual(e.message, "Missing required request parameters");
-            Assert.AreEqual(e.message_detail, "user_id or username");
+            Assert.AreEqual(e.HttpStatus, 400);
+            Assert.AreEqual(e.Code, 40001);
+            Assert.AreEqual(e.ApiMessage, "Missing required request parameters");
+            Assert.AreEqual(e.ApiMessageDetail, "user_id or username");
         }
     }
 
@@ -330,7 +330,7 @@ public class TestApiCall
         }
         catch (BadResponseException e)
         {
-            Assert.AreEqual(e.http_status, 400);
+            Assert.AreEqual(e.HttpStatus, 400);
         }
     }
 
@@ -349,7 +349,7 @@ public class TestApiCall
         }
         catch (BadResponseException e)
         {
-            Assert.AreEqual(e.http_status, 500);
+            Assert.AreEqual(e.HttpStatus, 500);
         }
     }
 
