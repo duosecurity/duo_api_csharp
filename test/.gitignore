@@ -1,1 +1,5 @@
 TestResult.xml
+DuoApiTest.suo
+DuoApiTest.csproj.*
+bin
+obj
