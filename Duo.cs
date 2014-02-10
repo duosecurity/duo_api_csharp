@@ -83,7 +83,7 @@ namespace Duo
                 p = p.Replace("+", "%20");
                 ret.Add(p);
             }
-            ret.Sort();
+            ret.Sort(StringComparer.Ordinal);
             return string.Join("&", ret.ToArray());
         }
 
