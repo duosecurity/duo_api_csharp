@@ -13,6 +13,7 @@ using System.Text.RegularExpressions;
 using System.Text;
 using System.Web.Script.Serialization;
 using System.Web;
+using System.Globalization;
 
 namespace Duo
 {
@@ -71,11 +72,11 @@ namespace Duo
                 // Signatures require upper-case hex digits.
                 p = Regex.Replace(p,
                                   "(%[0-9A-Fa-f][0-9A-Fa-f])",
-                                  c => c.Value.ToUpper());
+                                  c => c.Value.ToUpperInvariant());
                 // Escape only the expected characters.
                 p = Regex.Replace(p,
                                   "([!'()*])",
-                                  c => "%" + Convert.ToByte(c.Value[0]).ToString("x").ToUpper());
+                                  c => "%" + Convert.ToByte(c.Value[0]).ToString("X"));
                 p = p.Replace("%7E", "~");
                 // UrlEncode converts space (" ") to "+". The
                 // signature algorithm requires "%20" instead. Actual
@@ -94,7 +95,7 @@ namespace Duo
         {
             string[] lines = {
                 date,
-                method.ToUpper(),
+                method.ToUpperInvariant(),
                 this.host.ToLower(),
                 path,
                 canon_params,
@@ -340,7 +341,8 @@ namespace Duo
         {
             // Can't use the "zzzz" format because it adds a ":"
             // between the offset's hours and minutes.
-            string date_string = date.ToString("ddd, dd MMM yyyy HH:mm:ss");
+            string date_string = date.ToString(
+                "ddd, dd MMM yyyy HH:mm:ss", CultureInfo.InvariantCulture);
             int offset = TimeZone.CurrentTimeZone.GetUtcOffset(date).Hours;
             string zone;
             // + or -, then 0-pad, then offset, then more 0-padding.
@@ -353,7 +355,7 @@ namespace Duo
             {
                 zone = "+";
             }
-            zone += offset.ToString().PadLeft(2, '0');
+            zone += offset.ToString(CultureInfo.InvariantCulture).PadLeft(2, '0');
             date_string += " " + zone.PadRight(5, '0');
             return date_string;
         }
