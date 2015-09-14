@@ -31,6 +31,15 @@ class DuoAdmin
             System.Console.WriteLine(s);
         }
 
+        // /admin/v1/users returns a JSON Array instead of an object.
+        var users = client.JSONApiCall<System.Collections.ArrayList>(
+            "GET", "/admin/v1/users", parameters);
+        System.Console.WriteLine(String.Format("{0} users.", users.Count));
+        foreach (Dictionary<string, object> user in users) {
+            System.Console.WriteLine(
+                "\t" + "Username: " + (user["username"] as string));
+        }
+
         return 0;
     }
 }
