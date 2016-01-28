@@ -7,12 +7,16 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Text;
 using System.Web.Script.Serialization;
 using System.Web;
 using System.Globalization;
+using System.Linq;
+using System.Runtime.InteropServices;
+
 
 namespace Duo
 {
@@ -184,6 +188,11 @@ namespace Duo
             request.Headers.Add("Authorization", auth);
             request.Headers.Add("X-Duo-Date", date_string);
             request.UserAgent = this.user_agent;
+            // If no proxy, check for and use WinHTTP proxy as autoconfig won't pick this up when run from a service
+            if (!HasProxyServer(request))
+                request.Proxy = GetWinhttpProxy();
+            LogProxyInfo(request.Proxy);
+
 
             if (method.Equals("POST") || method.Equals("PUT"))
             {
@@ -317,6 +326,7 @@ namespace Duo
                 System.Environment.Version);
         }
 
+        #region Private Methods
         private string HmacSign(string data)
         {
             byte[] key_bytes = ASCIIEncoding.ASCII.GetBytes(this.skey);
@@ -358,6 +368,203 @@ namespace Duo
             date_string += " " + zone.PadRight(5, '0');
             return date_string;
         }
+
+        /// <summary>
+        /// Gets the WinHTTP proxy.
+        /// </summary>
+        /// <remarks>
+        /// Normally, C# picks up these proxy settings by default, but when run under the SYSTEM account, it does not.
+        /// </remarks>
+        /// <returns></returns>
+        private static System.Net.WebProxy GetWinhttpProxy()
+        {
+            string[] proxyServerNames = null;
+            string primaryProxyServer = null;
+            string[] bypassHostnames = null;
+            bool enableLocalBypass = false;
+            System.Net.WebProxy winhttpProxy = null;
+
+            // Has a proxy been configured?
+            // No.  Is a WinHTTP proxy set?
+            int internetHandle = WinHttpOpen("DuoTest", WinHttp_Access_Type.WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, null, null, 0);
+            if (internetHandle != 0)
+            {
+                // Yes, use it.  This is normal when run under the SYSTEM account and a WinHTTP proxy is configured.  When run as a normal user,
+                // the Proxy property will already be configured correctly.  To resolve this for SYSTEM, manually read proxy settings and configure.
+                var proxyInfo = new WINHTTP_PROXY_INFO();
+                WinHttpGetDefaultProxyConfiguration(proxyInfo);
+                if (proxyInfo.lpszProxy != null)
+                {
+                    if (proxyInfo.lpszProxy != null)
+                    {
+                        proxyServerNames = proxyInfo.lpszProxy.Split(new char[] { ' ', '\t', ';' });
+                        if ((proxyServerNames == null) || (proxyServerNames.Length == 0))
+                            primaryProxyServer = proxyInfo.lpszProxy;
+                        else
+                            primaryProxyServer = proxyServerNames[0];
+                    }
+                    if (proxyInfo.lpszProxyBypass != null)
+                    {
+                        bypassHostnames = proxyInfo.lpszProxyBypass.Split(new char[] { ' ', '\t', ';' });
+                        if ((bypassHostnames == null) || (bypassHostnames.Length == 0))
+                            bypassHostnames = new string[] { proxyInfo.lpszProxyBypass };
+                        if (bypassHostnames != null)
+                            enableLocalBypass = bypassHostnames.Contains("local", StringComparer.InvariantCultureIgnoreCase);
+                    }
+                    if (primaryProxyServer != null)
+                        winhttpProxy = new System.Net.WebProxy(proxyServerNames[0], enableLocalBypass, bypassHostnames);
+                }
+                WinHttpCloseHandle(internetHandle);
+                internetHandle = 0;
+            }
+            else
+            {
+                throw new Exception(String.Format("WinHttp init failed {0}", System.Runtime.InteropServices.Marshal.GetLastWin32Error()));
+            }
+
+            return winhttpProxy;
+        }
+
+        /// <summary>
+        /// Determines if the specified web request is using a proxy server.
+        /// </summary>
+        /// <remarks>
+        /// If no proxy is set, the Proxy member is typically non-null and set to an object type that includes but hides IWebProxy with no address,
+        /// so it cannot be inspected.  Resolving this requires reflection to extract the hidden webProxy object and check it's Address member.
+        /// </remarks>
+        /// <param name="requestObject">Request to check</param>
+        /// <returns>TRUE if a proxy is in use, else FALSE</returns>
+        public static bool HasProxyServer(HttpWebRequest requestObject)
+        {
+            WebProxy actualProxy = null;
+            bool hasProxyServer = false;
+
+            if (requestObject.Proxy != null)
+            {
+                // WebProxy is described as the base class for IWebProxy, so we should always see this type as the field is initialized by the framework.
+                if (!(requestObject.Proxy is WebProxy))
+                {
+                    var webProxyField = requestObject.Proxy.GetType().GetField("webProxy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                    if (webProxyField != null)
+                        actualProxy = webProxyField.GetValue(requestObject.Proxy) as WebProxy;
+                }
+                else
+                {
+                    actualProxy = requestObject.Proxy as WebProxy;
+                }
+                hasProxyServer = (actualProxy.Address != null);
+            }
+            else
+            {
+                hasProxyServer = false;
+            }
+
+            return hasProxyServer;
+        }
+
+        /// <summary>
+        /// Logs information about the specified proxy object to the global logger
+        /// </summary>
+        /// <param name="proxyObject">Proxy object to log information about</param>
+        /// <param name="name">Optional name for proxy object, in form Proxy {0} Details.  If not specified, heading is Proxy Details.</param>
+        public void LogProxyInfo( IWebProxy proxyObject, string name = null )
+        {
+            var logLines = new LogBuilder();
+            if (proxyObject != null)
+            {
+                var proxyActual = proxyObject as System.Net.WebProxy;
+                if (proxyActual == null)
+                {
+                    var webProxyField = proxyObject.GetType().GetField("webProxy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                    if (webProxyField != null)
+                        proxyActual = webProxyField.GetValue(proxyObject) as System.Net.WebProxy;
+                }
+                if (proxyActual != null)
+                {
+                    if (proxyActual.Address != null)
+                    {
+                        if (name == null)
+                            logLines.AppendLine("Proxy Details");
+                        else
+                            logLines.Append(String.Format("Proxy {0} Details", name));
+                        logLines.Append(String.Format("   Address = {0}", proxyActual.Address));
+                        if (proxyActual.Address.IsDefaultPort)
+                            logLines.Append(String.Format("   using Default port"));
+                        else
+                            logLines.Append(String.Format("   using port {0}", proxyActual.Address.Port));
+                        if (proxyActual.BypassProxyOnLocal)
+                            logLines.Append(String.Format("   Local bypass ON"));
+                        if ((proxyActual.BypassList != null) && (proxyActual.BypassList.Length > 0))
+                        {
+                            logLines.Append(String.Format("   Bypass ({0} entries)", proxyActual.BypassList));
+                            foreach (var currBypassEntry in proxyActual.BypassList)
+                                logLines.Append(String.Format("   {0}", currBypassEntry));
+                        }
+                        if (proxyActual.UseDefaultCredentials)
+                            logLines.Append(String.Format("   Using default credentials"));
+                    }
+                    else
+                    {
+                        if (name == null)
+                            logLines.Append(String.Format("Proxy:  Not Configured"));
+                        else
+                            logLines.Append(String.Format("Proxy {0}:  Not Configured", name));
+                    }
+                }
+                else
+                {
+                    if (name == null)
+                        logLines.Append(String.Format("Proxy:  Unrecognized type {0}, cannot describe", proxyActual.GetType().Name));
+                    else
+                        logLines.Append(String.Format("Proxy {0}:  Unrecognized type {1}, cannot describe", name, proxyActual.GetType().Name));
+                }
+
+            }
+            else
+            {
+                if (name == null)
+                    logLines.Append(String.Format("Proxy:  Not Configured", name));
+                else
+                    logLines.Append(String.Format("Proxy {0}:  Not Configured", name));
+            }
+            DuoBaseHttpMod.LogEvent(logLines, System.Diagnostics.EventLogEntryType.Information);
+        }
+        #endregion Private Methods
+
+        #region Private DllImport
+        private enum WinHttp_Access_Type
+        {
+            WINHTTP_ACCESS_TYPE_DEFAULT_PROXY = 0,
+            WINHTTP_ACCESS_TYPE_NO_PROXY = 1,
+            WINHTTP_ACCESS_TYPE_NAMED_PROXY = 3,
+            /// <summary>
+            /// Undocumented; supported on Win8.1+ per NET framework source.
+            /// </summary>
+            WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY = 4
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private class WINHTTP_PROXY_INFO
+        {
+            public int dwAccessType;
+            [MarshalAs(UnmanagedType.LPWStr)]
+            public string lpszProxy;
+            [MarshalAs(UnmanagedType.LPWStr)]
+            public string lpszProxyBypass;
+        }
+        [DllImport("winhttp.dll", CharSet = CharSet.Unicode)]
+        private static extern bool WinHttpGetDefaultProxyConfiguration([In, Out] WINHTTP_PROXY_INFO proxyInfo);
+
+        [DllImport("winhttp.dll", CharSet = CharSet.Unicode)]
+        private static extern int WinHttpOpen([MarshalAs(UnmanagedType.LPWStr)] string pwszUserAgent,
+          WinHttp_Access_Type dwAccessType,
+          [MarshalAs(UnmanagedType.LPWStr)] string pwszProxyName,
+          [MarshalAs(UnmanagedType.LPWStr)] string pwszProxyBypass,
+          int dwFlags);
+
+        [DllImport("winhttp.dll", CharSet = CharSet.Unicode)]
+        private static extern bool WinHttpCloseHandle(int hInternet);
+        #endregion Private DllImport
     }
 
     [Serializable]
