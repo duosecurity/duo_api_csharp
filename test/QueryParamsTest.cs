@@ -1,18 +1,17 @@
 /*
- * Copyright (c) 2013 Duo Security
- * All rights reserved, all wrongs reversed.
+ * Copyright (c) 2018 Duo Security
+ * All rights reserved
  */
 
 using Duo;
-using System;
 using System.Collections.Generic;
 
-using NUnit.Framework;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-[TestFixture]
+[TestClass]
 public class QueryParamsTest
 {
-    [Test]
+    [TestMethod]
     public void Simple()
     {
         var parameters = new Dictionary<string, string>
@@ -24,13 +23,13 @@ public class QueryParamsTest
         Assert.AreEqual(expected, DuoApi.CanonicalizeParams(parameters));
     }
 
-    [Test]
+    [TestMethod]
     public void ZeroParams() {
         var parameters = new Dictionary<string, string>();
         Assert.AreEqual("", DuoApi.CanonicalizeParams(parameters));
     }
 
-    [Test]
+    [TestMethod]
     public void OneParam() {
         var parameters = new Dictionary<string, string>
             {
@@ -40,7 +39,7 @@ public class QueryParamsTest
         Assert.AreEqual(expected, DuoApi.CanonicalizeParams(parameters));
     }
 
-    [Test]
+    [TestMethod]
     public void PrintableASCII() {
         var parameters = new Dictionary<string, string>
             {
@@ -53,7 +52,7 @@ public class QueryParamsTest
         Assert.AreEqual(expected, DuoApi.CanonicalizeParams(parameters));
     }
 
-    [Test]
+    [TestMethod]
     public void UnicodeFuzzValues() {
         var parameters = new Dictionary<string, string>
             {
@@ -66,7 +65,7 @@ public class QueryParamsTest
         Assert.AreEqual(expected, DuoApi.CanonicalizeParams(parameters));
     }
 
-    [Test]
+    [TestMethod]
     public void UnicodeFuzzKeysAndValues()
     {
         var parameters = new Dictionary<string, string>
@@ -80,7 +79,7 @@ public class QueryParamsTest
         Assert.AreEqual(expected, DuoApi.CanonicalizeParams(parameters));
     }
 
-    [Test]
+    [TestMethod]
     public void SortOrderWithCommonPrefix()
     {
         var parameters = new Dictionary<string, string>

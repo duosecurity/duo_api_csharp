@@ -1,12 +1,11 @@
 ﻿using Duo;
 using System;
 using System.Net;
-using System.Text;
 using System.Threading;
 using System.Collections.Generic;
 using System.IO;
 
-using NUnit.Framework;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 // Subclass DuoApi so we can test using HTTP rather than HTTPS
 public class TestDuoApi : DuoApi
@@ -90,14 +89,15 @@ public class TestServer
     private TestDispatchHandler _handler;
 }
 
-[TestFixture]
+
+[TestClass]
 public class TestApiCall
 {
     private const string test_ikey = "DI9FD6NAKXN4B9DTCCB7";
     private const string test_skey = "RScfSuMrpL52TaciEhGtZkGjg8W4JSe5luPL63J8";
     private const string test_host = "localhost:8080";
 
-    [SetUp]
+    [TestInitialize]
     public void SetUp()
     {
         api = new TestDuoApi(test_ikey, test_skey, test_host);
@@ -106,13 +106,13 @@ public class TestApiCall
         srvThread.Start();
     }
 
-    [TearDown]
+    [TestCleanup]
     public void CleanUp()
     {
         srvThread.Join();
     }
 
-    [Test]
+    [TestMethod]
     public void Test401Response()
     {
         srv.handler = delegate(HttpListenerContext ctx) {
@@ -126,7 +126,7 @@ public class TestApiCall
         Assert.AreEqual(response, "Hello, Unauthorized World!");
     }
 
-    [Test]
+    [TestMethod]
     public void Test200Response()
     {
         srv.handler = delegate(HttpListenerContext ctx)
@@ -140,7 +140,7 @@ public class TestApiCall
         Assert.AreEqual(response, "Hello, World!");
     }
 
-    [Test]
+    [TestMethod]
     public void TestDefaultUserAgent()
     {
         srv.handler = delegate(HttpListenerContext ctx)
@@ -152,10 +152,10 @@ public class TestApiCall
         HttpStatusCode code;
         string response = api.ApiCall("GET", "/DefaultUserAgent", new Dictionary<string, string>(), 10000, out code);
         Assert.AreEqual(code, HttpStatusCode.OK);
-        StringAssert.StartsWith(api.DEFAULT_AGENT, response);
+        StringAssert.StartsWith(response, api.DEFAULT_AGENT);
     }
 
-    [Test]
+    [TestMethod]
     public void TestCustomUserAgent()
     {
         api = new TestDuoApi(test_ikey, test_skey, test_host, "CustomUserAgent/1.0");
@@ -170,7 +170,7 @@ public class TestApiCall
         Assert.AreEqual("CustomUserAgent/1.0", response);
     }
 
-    [Test]
+    [TestMethod]
     public void TestGetParameterSigning()
     {
         Dictionary<string, string> parameters = new Dictionary<string, string>
@@ -213,7 +213,7 @@ public class TestApiCall
         Assert.AreEqual("OK", response);
     }
 
-    [Test]
+    [TestMethod]
     public void TestPostParameterSigning()
     {
         Dictionary<string, string> parameters = new Dictionary<string, string>
@@ -257,7 +257,7 @@ public class TestApiCall
         Assert.AreEqual("OK", response);
     }
 
-    [Test]
+    [TestMethod]
     public void TestPostParameterSigningCustomDate()
     {
         Dictionary<string, string> parameters = new Dictionary<string, string>
@@ -308,7 +308,7 @@ public class TestApiCall
     }
 
 
-    [Test]
+    [TestMethod]
     public void TestJsonTimeout()
     {
         srv.handler = delegate(HttpListenerContext ctx)
@@ -332,7 +332,7 @@ public class TestApiCall
         }
     }
 
-    [Test]
+    [TestMethod]
     public void TestValidJsonResponse()
     {
         srv.handler = delegate(HttpListenerContext ctx)
@@ -343,7 +343,7 @@ public class TestApiCall
         Assert.AreEqual(response, "hello, world!");
     }
 
-    [Test]
+    [TestMethod]
     public void TestErrorJsonResponse()
     {
         srv.handler = delegate(HttpListenerContext ctx)
@@ -364,7 +364,7 @@ public class TestApiCall
         }
     }
 
-    [Test]
+    [TestMethod]
     public void TestJsonResponseMissingField()
     {
         srv.handler = delegate(HttpListenerContext ctx)
@@ -383,7 +383,7 @@ public class TestApiCall
         }
     }
 
-    [Test]
+    [TestMethod]
     public void TestJsonUnparseableResponse()
     {
         srv.handler = delegate(HttpListenerContext ctx)
@@ -406,4 +406,3 @@ public class TestApiCall
     private Thread srvThread;
     private TestDuoApi api;
 }
-

@@ -1,18 +1,17 @@
 /*
- * Copyright (c) 2013 Duo Security
- * All rights reserved, all wrongs reversed.
+ * Copyright (c) 2018 Duo Security
+ * All rights reserved
  */
 
 using Duo;
-using System;
 using System.Collections.Generic;
 
-using NUnit.Framework;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-[TestFixture]
+[TestClass]
 public class SigningTest
 {
-    [Test]
+    [TestMethod]
     public void HmacSha1()
     {
         var ikey = "test_ikey";

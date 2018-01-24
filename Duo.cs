@@ -1,13 +1,12 @@
 /*
- * Copyright (c) 2013 Duo Security
- * All rights reserved, all wrongs reversed.
+ * Copyright (c) 2018 Duo Security
+ * All rights reserved
  */
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Text;
@@ -191,8 +190,6 @@ namespace Duo
             // If no proxy, check for and use WinHTTP proxy as autoconfig won't pick this up when run from a service
             if (!HasProxyServer(request))
                 request.Proxy = GetWinhttpProxy();
-            LogProxyInfo(request.Proxy);
-
 
             if (method.Equals("POST") || method.Equals("PUT"))
             {
@@ -460,74 +457,6 @@ namespace Duo
             }
 
             return hasProxyServer;
-        }
-
-        /// <summary>
-        /// Logs information about the specified proxy object to the global logger
-        /// </summary>
-        /// <param name="proxyObject">Proxy object to log information about</param>
-        /// <param name="name">Optional name for proxy object, in form Proxy {0} Details.  If not specified, heading is Proxy Details.</param>
-        public void LogProxyInfo( IWebProxy proxyObject, string name = null )
-        {
-            var logLines = new LogBuilder();
-            if (proxyObject != null)
-            {
-                var proxyActual = proxyObject as System.Net.WebProxy;
-                if (proxyActual == null)
-                {
-                    var webProxyField = proxyObject.GetType().GetField("webProxy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
-                    if (webProxyField != null)
-                        proxyActual = webProxyField.GetValue(proxyObject) as System.Net.WebProxy;
-                }
-                if (proxyActual != null)
-                {
-                    if (proxyActual.Address != null)
-                    {
-                        if (name == null)
-                            logLines.AppendLine("Proxy Details");
-                        else
-                            logLines.Append(String.Format("Proxy {0} Details", name));
-                        logLines.Append(String.Format("   Address = {0}", proxyActual.Address));
-                        if (proxyActual.Address.IsDefaultPort)
-                            logLines.Append(String.Format("   using Default port"));
-                        else
-                            logLines.Append(String.Format("   using port {0}", proxyActual.Address.Port));
-                        if (proxyActual.BypassProxyOnLocal)
-                            logLines.Append(String.Format("   Local bypass ON"));
-                        if ((proxyActual.BypassList != null) && (proxyActual.BypassList.Length > 0))
-                        {
-                            logLines.Append(String.Format("   Bypass ({0} entries)", proxyActual.BypassList));
-                            foreach (var currBypassEntry in proxyActual.BypassList)
-                                logLines.Append(String.Format("   {0}", currBypassEntry));
-                        }
-                        if (proxyActual.UseDefaultCredentials)
-                            logLines.Append(String.Format("   Using default credentials"));
-                    }
-                    else
-                    {
-                        if (name == null)
-                            logLines.Append(String.Format("Proxy:  Not Configured"));
-                        else
-                            logLines.Append(String.Format("Proxy {0}:  Not Configured", name));
-                    }
-                }
-                else
-                {
-                    if (name == null)
-                        logLines.Append(String.Format("Proxy:  Unrecognized type {0}, cannot describe", proxyActual.GetType().Name));
-                    else
-                        logLines.Append(String.Format("Proxy {0}:  Unrecognized type {1}, cannot describe", name, proxyActual.GetType().Name));
-                }
-
-            }
-            else
-            {
-                if (name == null)
-                    logLines.Append(String.Format("Proxy:  Not Configured", name));
-                else
-                    logLines.Append(String.Format("Proxy {0}:  Not Configured", name));
-            }
-            DuoBaseHttpMod.LogEvent(logLines, System.Diagnostics.EventLogEntryType.Information);
         }
         #endregion Private Methods
 
