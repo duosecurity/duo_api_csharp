@@ -64,7 +64,6 @@
   <ItemGroup>
     <Compile Include="Duo.cs" />
     <Compile Include="examples\DuoAdmin.cs" />
-    <Compile Include="examples\DuoVerify.cs" />
     <Compile Include="test\ApiCallTest.cs" />
     <Compile Include="test\Properties\AssemblyInfo.cs" />
     <Compile Include="test\QueryParamsTest.cs" />
