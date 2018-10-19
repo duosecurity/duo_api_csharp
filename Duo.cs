@@ -132,7 +132,7 @@ namespace Duo
         /// <param name="timeout">The request timeout, in milliseconds.
         /// Specify 0 to use the system-default timeout. Use caution if
         /// you choose to specify a custom timeout - some API
-        /// calls (particularly in the Auth and Verify APIs) will not
+        /// calls (particularly in the Auth APIs) will not
         /// return a response until an out-of-band authentication process
         /// has completed. In some cases, this may take as much as a
         /// small number of minutes.</param>
@@ -152,7 +152,7 @@ namespace Duo
         /// <param name="timeout">The request timeout, in milliseconds.
         /// Specify 0 to use the system-default timeout. Use caution if
         /// you choose to specify a custom timeout - some API
-        /// calls (particularly in the Auth and Verify APIs) will not
+        /// calls (particularly in the Auth APIs) will not
         /// return a response until an out-of-band authentication process
         /// has completed. In some cases, this may take as much as a
         /// small number of minutes.</param>
@@ -237,7 +237,7 @@ namespace Duo
         /// <param name="timeout">The request timeout, in milliseconds.
         /// Specify 0 to use the system-default timeout. Use caution if
         /// you choose to specify a custom timeout - some API
-        /// calls (particularly in the Auth and Verify APIs) will not
+        /// calls (particularly in the Auth APIs) will not
         /// return a response until an out-of-band authentication process
         /// has completed. In some cases, this may take as much as a
         /// small number of minutes.</param>
@@ -257,7 +257,7 @@ namespace Duo
         /// <param name="timeout">The request timeout, in milliseconds.
         /// Specify 0 to use the system-default timeout. Use caution if
         /// you choose to specify a custom timeout - some API
-        /// calls (particularly in the Auth and Verify APIs) will not
+        /// calls (particularly in the Auth APIs) will not
         /// return a response until an out-of-band authentication process
         /// has completed. In some cases, this may take as much as a
         /// small number of minutes.</param>

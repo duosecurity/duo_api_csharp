@@ -1,4 +1,4 @@
-EXES := DuoVerify.exe DuoAdmin.exe
+EXES := DuoAdmin.exe
 
 all: $(EXES)
 
