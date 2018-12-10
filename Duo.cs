@@ -226,6 +226,67 @@ namespace Duo
             return reader.ReadToEnd();
         }
 
+        /// <param name="date">The current date and time, used to authenticate
+        /// the API request. Typically, you should specify DateTime.UtcNow,
+        /// but if you do not wish to rely on the system-wide clock, you may
+        /// determine the current date/time by some other means.</param>
+        /// <param name="timeout">The request timeout, in milliseconds.
+        /// Specify 0 to use the system-default timeout. Use caution if
+        /// you choose to specify a custom timeout - some API
+        /// calls (particularly in the Auth APIs) will not
+        /// return a complete JSON response.</param>
+        /// raises if JSON response indicates an error
+        private Dictionary<string, object> BaseJSONApiCall(string method,
+                                string path,
+                                Dictionary<string, string> parameters,
+                                int timeout,
+                                DateTime date)
+        {
+            HttpStatusCode statusCode;
+            string res = this.ApiCall(method, path, parameters, timeout, date, out statusCode);
+
+            var jss = new JavaScriptSerializer();
+
+            try
+            {
+                var dict = jss.Deserialize<Dictionary<string, object>>(res);
+                if (dict["stat"] as string == "OK")
+                {
+                    return dict;
+                }
+                else
+                {
+                    int? check = dict["code"] as int?;
+                    int code;
+                    if (check.HasValue)
+                    {
+                        code = check.Value;
+                    }
+                    else
+                    {
+                        code = 0;
+                    }
+                    String message_detail = "";
+                    if (dict.ContainsKey("message_detail"))
+                    {
+                        message_detail = dict["message_detail"] as string;
+                    }
+                    throw new ApiException(code,
+                                           (int)statusCode,
+                                           dict["message"] as string,
+                                           message_detail);
+                }
+            }
+            catch (ApiException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                throw new BadResponseException((int)statusCode, e);
+            }
+        }
+
         public T JSONApiCall<T>(string method,
                                 string path,
                                 Dictionary<string, string> parameters)
@@ -268,51 +329,54 @@ namespace Duo
                                 DateTime date)
             where T : class
         {
-            HttpStatusCode statusCode;
-            string res = this.ApiCall(method, path, parameters, timeout, date, out statusCode);
-
-            var jss = new JavaScriptSerializer();
-
-            try
-            {
-                var dict = jss.Deserialize<Dictionary<string, object>>(res);
-                if (dict["stat"] as string == "OK")
-                {
-                    return dict["response"] as T;
-                }
-                else
-                {
-                    int? check = dict["code"] as int?;
-                    int code;
-                    if (check.HasValue)
-                    {
-                        code = check.Value;
-                    }
-                    else
-                    {
-                        code = 0;
-                    }
-                    String message_detail = "";
-                    if (dict.ContainsKey("message_detail"))
-                    {
-                        message_detail = dict["message_detail"] as string;
-                    }
-                    throw new ApiException(code,
-                                           (int)statusCode,
-                                           dict["message"] as string,
-                                           message_detail);
-                }
-            }
-            catch (ApiException)
-            {
-                throw;
-            }
-            catch (Exception e)
-            {
-                throw new BadResponseException((int)statusCode, e);
-            }
+            var dict = BaseJSONApiCall(method, path, parameters, timeout, date);
+            return dict["response"] as T;
         }
 
+        public Dictionary<string, object> JSONPagingApiCall(string method,
+                               string path,
+                               Dictionary<string, string> parameters,
+                               int offset,
+                               int limit)
+        {
+            return JSONPagingApiCall(method, path, parameters, offset, limit, 0, DateTime.UtcNow);
+        }
+
+        /// <param name="date">The current date and time, used to authenticate
+        /// the API request. Typically, you should specify DateTime.UtcNow,
+        /// but if you do not wish to rely on the system-wide clock, you may
+        /// determine the current date/time by some other means.</param>
+        /// <param name="timeout">The request timeout, in milliseconds.
+        /// Specify 0 to use the system-default timeout. Use caution if
+        /// you choose to specify a custom timeout - some API
+        /// calls (particularly in the Auth APIs) will not
+        /// return a response until an out-of-band authentication process
+        /// has completed. In some cases, this may take as much as a
+        /// small number of minutes.</param>
+        /// <param name="offset">The offset of the first record in the next
+        /// page of results within the total result set.</param>
+        /// <param name="limit">The number of records you would like returned
+        /// with this request.  The service is free to return a different
+        /// number.  You should use the 'next_offset' from the returned
+        /// metadata to pick the offset for the next page.</param>
+        /// return a JSON dictionary with top level keys: stat, response, metadata.
+        /// The actual requested data is in 'response'.  'metadata' contains a
+        /// 'next_offset' key which should be used to fetch the next page.
+        public Dictionary<string, object> JSONPagingApiCall(string method,
+                                string path,
+                                Dictionary<string, string> parameters,
+                                int offset,
+                                int limit,
+                                int timeout,
+                                DateTime date)
+        {
+            parameters.Add("offset", offset.ToString());
+            parameters.Add("limit", limit.ToString());
+
+            return this.BaseJSONApiCall(method, path, parameters, timeout, date);
+        }
+
+ 
         /// Helper to format a User-Agent string with some information about
         /// the operating system / .NET runtime
         /// <param name="product_name">e.g. "FooClient/1.0"</param>

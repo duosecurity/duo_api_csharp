@@ -344,6 +344,18 @@ public class TestApiCall
     }
 
     [TestMethod]
+    public void TestValidJsonPagingResponse()
+    {
+        srv.handler = delegate (HttpListenerContext ctx)
+        {
+            return "{\"stat\": \"OK\", \"response\": \"hello, world!\", \"metadata\": {\"next_offset\":10}}";
+        };
+        var jsonResponse = api.JSONPagingApiCall("GET", "/json_ok", new Dictionary<string, string>(), 0, 10);
+        Assert.AreEqual(jsonResponse["response"], "hello, world!");
+        var metadata = jsonResponse["metadata"] as Dictionary<string, object>;
+        Assert.AreEqual(metadata["next_offset"], 10);
+    }
+    [TestMethod]
     public void TestErrorJsonResponse()
     {
         srv.handler = delegate(HttpListenerContext ctx)
