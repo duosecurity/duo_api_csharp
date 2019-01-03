@@ -42,7 +42,7 @@ class DuoAdmin
         // paging call
         int? offset = 0;
         while (offset != null) {
-            var jsonResponse = client.JSONPagingApiCall("GET", "/admin/v1/users", parameters, offset, 10);
+            var jsonResponse = client.JSONPagingApiCall("GET", "/admin/v1/users", parameters, (int)offset, 10);
             var pagedUsers = jsonResponse["response"] as System.Collections.ArrayList;
             System.Console.WriteLine(String.Format("{0} users at offset {1}", pagedUsers.Count, offset));
             foreach (Dictionary<string, object> user in pagedUsers) {
@@ -50,7 +50,14 @@ class DuoAdmin
                     "\t" + "Username: " + (user["username"] as string));
             }
             var metadata = jsonResponse["metadata"] as Dictionary<string, object>;
-            offset = metadata["next_offset"] as int?;
+            if (metadata.ContainsKey("next_offset"))
+            {
+                offset = metadata["next_offset"] as int?;
+            }
+            else
+            {
+                offset = null;
+            }
         }
 
         return 0;
