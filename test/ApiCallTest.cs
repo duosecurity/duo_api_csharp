@@ -344,17 +344,43 @@ public class TestApiCall
     }
 
     [TestMethod]
-    public void TestValidJsonPagingResponse()
+    public void TestValidJsonPagingResponseNoParameters()
     {
         srv.handler = delegate (HttpListenerContext ctx)
         {
             return "{\"stat\": \"OK\", \"response\": \"hello, world!\", \"metadata\": {\"next_offset\":10}}";
         };
-        var jsonResponse = api.JSONPagingApiCall("GET", "/json_ok", new Dictionary<string, string>(), 0, 10);
+        var parameters = new Dictionary<string, string>();
+        var jsonResponse = api.JSONPagingApiCall("GET", "/json_ok", parameters, 0, 10);
         Assert.AreEqual(jsonResponse["response"], "hello, world!");
         var metadata = jsonResponse["metadata"] as Dictionary<string, object>;
         Assert.AreEqual(metadata["next_offset"], 10);
+        // make sure parameters was not changed as a side-effect
+        Assert.AreEqual(parameters.Count, 0);
     }
+
+    [TestMethod]
+    public void TestValidJsonPagingResponseExistingParameters()
+    {
+        srv.handler = delegate (HttpListenerContext ctx)
+        {
+            return "{\"stat\": \"OK\", \"response\": \"hello, world!\", \"metadata\": {}}";
+        };
+        var parameters = new Dictionary<string, string>()
+        {
+            {"offset", "0"},
+            {"limit", "10"}
+        };
+        var jsonResponse = api.JSONPagingApiCall("GET", "/json_ok", parameters, 10, 20);
+        Assert.AreEqual(jsonResponse["response"], "hello, world!");
+        var metadata = jsonResponse["metadata"] as Dictionary<string, object>;
+        Assert.IsFalse(metadata.ContainsKey("next_offset"));
+        // make sure parameters was not changed as a side-effect
+        Assert.AreEqual(parameters.Count, 2);
+        Assert.AreEqual(parameters["offset"], "0");
+        Assert.AreEqual(parameters["limit"], "10");
+    }
+
     [TestMethod]
     public void TestErrorJsonResponse()
     {

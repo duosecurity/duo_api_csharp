@@ -370,8 +370,10 @@ namespace Duo
                                 int timeout,
                                 DateTime date)
         {
-            parameters.Add("offset", offset.ToString());
-            parameters.Add("limit", limit.ToString());
+            // copy parameters so we don't cause any side-effects
+            parameters = new Dictionary<string, string>(parameters);
+            parameters["offset"] = offset.ToString(); // overrides caller value
+            parameters["limit"] = limit.ToString();
 
             return this.BaseJSONApiCall(method, path, parameters, timeout, date);
         }
