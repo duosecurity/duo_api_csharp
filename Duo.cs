@@ -63,6 +63,24 @@ namespace Duo
             }
         }
 
+        public static string FinishCanonicalize(string p)
+        {
+            // Signatures require upper-case hex digits.
+            p = Regex.Replace(p,
+                            "(%[0-9A-Fa-f][0-9A-Fa-f])",
+                            c => c.Value.ToUpperInvariant());
+            // Escape only the expected characters.
+            p = Regex.Replace(p,
+                            "([!'()*])",
+                            c => "%" + Convert.ToByte(c.Value[0]).ToString("X"));
+            p = p.Replace("%7E", "~");
+            // UrlEncode converts space (" ") to "+". The
+            // signature algorithm requires "%20" instead. Actual
+            // + has already been replaced with %2B.
+            p = p.Replace("+", "%20");
+            return p;
+        }
+
         public static string CanonicalizeParams(Dictionary<string, string> parameters)
         {
             var ret = new List<String>();
@@ -71,24 +89,47 @@ namespace Duo
                 string p = String.Format("{0}={1}",
                                          HttpUtility.UrlEncode(pair.Key),
                                          HttpUtility.UrlEncode(pair.Value));
-                // Signatures require upper-case hex digits.
-                p = Regex.Replace(p,
-                                  "(%[0-9A-Fa-f][0-9A-Fa-f])",
-                                  c => c.Value.ToUpperInvariant());
-                // Escape only the expected characters.
-                p = Regex.Replace(p,
-                                  "([!'()*])",
-                                  c => "%" + Convert.ToByte(c.Value[0]).ToString("X"));
-                p = p.Replace("%7E", "~");
-                // UrlEncode converts space (" ") to "+". The
-                // signature algorithm requires "%20" instead. Actual
-                // + has already been replaced with %2B.
-                p = p.Replace("+", "%20");
+
+                p = FinishCanonicalize(p);
                 ret.Add(p);
             }
             ret.Sort(StringComparer.Ordinal);
             return string.Join("&", ret.ToArray());
         }
+
+
+        // handle value as an object eg. next_offset = ["123", "fdajkld"]
+        public static string CanonicalizeParams(Dictionary<string, object> parameters)
+        {
+            var ret = new List<String>();
+            foreach (KeyValuePair<string, object> pair in parameters)
+            {
+                string p = "";
+                if (pair.Value.GetType() == typeof(string[]))
+                {
+                    string[] values = (string[])pair.Value;
+                    string value1 = values[0];
+                    string value2 = values[1];
+                    p = String.Format("{0}={1}&{2}={3}",
+                                        HttpUtility.UrlEncode(pair.Key),
+                                        HttpUtility.UrlEncode(value1),
+                                        HttpUtility.UrlEncode(pair.Key),
+                                        HttpUtility.UrlEncode(value2));
+                }
+                else
+                {
+                    string val = (string)pair.Value;
+                    p = String.Format("{0}={1}",
+                                        HttpUtility.UrlEncode(pair.Key),
+                                        HttpUtility.UrlEncode(val));
+                }
+                p = FinishCanonicalizing(p);
+                ret.Add(p);
+            }
+            ret.Sort(StringComparer.Ordinal);
+            return string.Join("&", ret.ToArray());
+        }
+
 
         protected string CanonicalizeRequest(string method,
                                              string path,

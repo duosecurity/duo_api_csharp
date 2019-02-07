@@ -90,4 +90,17 @@ public class QueryParamsTest
         var expected = "foo=1&foo_bar=2";
         Assert.AreEqual(expected, DuoApi.CanonicalizeParams(parameters));
     }
+
+    [TestMethod]
+    public void NextOffsetTest()
+    {
+        string[] offset = new string[]{"fjaewoifjew", "473891274832917498"};
+        var parameters = new Dictionary<string, object>
+            {
+                {"next_offset", offset},
+                {"foo", "1"},
+            };
+        var expected = "foo=1&next_offset=fjaewoifjew&next_offset=473891274832917498";
+        Assert.AreEqual(expected, DuoApi.CanonicalizeParams(parameters));
+    }
 }
