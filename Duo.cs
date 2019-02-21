@@ -123,7 +123,7 @@ namespace Duo
                                         HttpUtility.UrlEncode(pair.Key),
                                         HttpUtility.UrlEncode(val));
                 }
-                p = FinishCanonicalizing(p);
+                p = FinishCanonicalize(p);
                 ret.Add(p);
             }
             ret.Sort(StringComparer.Ordinal);
