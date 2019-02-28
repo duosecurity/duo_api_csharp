@@ -23,11 +23,17 @@ namespace Duo
     {
         public string DEFAULT_AGENT = "DuoAPICSharp/1.0";
 
+        private const int INITIAL_BACKOFF_MS = 1000;
+        private const int MAX_BACKOFF_MS = 32000;
+        private const int BACKOFF_FACTOR = 2;
+        private const int RATE_LIMIT_HTTP_CODE = 429;
         private string ikey;
         private string skey;
         private string host;
         private string url_scheme;
         private string user_agent;
+        private SleepService sleepService;
+        private RandomService randomService;
 
         /// <param name="ikey">Duo integration key</param>
         /// <param name="skey">Duo secret key</param>
@@ -42,17 +48,19 @@ namespace Duo
         /// <param name="host">Application secret key</param>
         /// <param name="user_agent">HTTP client User-Agent</param>
         public DuoApi(string ikey, string skey, string host, string user_agent)
-            : this(ikey, skey, host, user_agent, "https")
+            : this(ikey, skey, host, user_agent, "https", new ThreadSleepService(), new SystemRandomService())
         {
         }
 
-        protected DuoApi(string ikey, string skey, string host, string user_agent, string url_scheme)
+        protected DuoApi(string ikey, string skey, string host, string user_agent, string url_scheme,
+                SleepService sleepService, RandomService randomService)
         {
             this.ikey = ikey;
             this.skey = skey;
             this.host = host;
             this.url_scheme = url_scheme;
-
+            this.sleepService = sleepService;
+            this.randomService = randomService;
             if (String.IsNullOrEmpty(user_agent))
             {
                 this.user_agent = FormatUserAgent(DEFAULT_AGENT);
@@ -222,11 +230,24 @@ namespace Duo
             string date_string = DuoApi.DateToRFC822(date);
             string auth = this.Sign(method, path, canon_params, date_string);
 
+
+
+            HttpWebResponse response = AttemptRetriableHttpRequest(
+                method, url, auth, date_string, canon_params, timeout);
+            StreamReader reader
+                = new StreamReader(response.GetResponseStream());
+            statusCode = response.StatusCode;
+            return reader.ReadToEnd();
+        }
+
+        private HttpWebRequest PrepareHttpRequest(String method, String url, String auth, String date,
+            String cannonParams, int timeout)
+        {
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
             request.Method = method;
             request.Accept = "application/json";
             request.Headers.Add("Authorization", auth);
-            request.Headers.Add("X-Duo-Date", date_string);
+            request.Headers.Add("X-Duo-Date", date);
             request.UserAgent = this.user_agent;
             // If no proxy, check for and use WinHTTP proxy as autoconfig won't pick this up when run from a service
             if (!HasProxyServer(request))
@@ -234,7 +255,7 @@ namespace Duo
 
             if (method.Equals("POST") || method.Equals("PUT"))
             {
-                byte[] data = Encoding.UTF8.GetBytes(canon_params);
+                byte[] data = Encoding.UTF8.GetBytes(cannonParams);
                 request.ContentType = "application/x-www-form-urlencoded";
                 request.ContentLength = data.Length;
                 using (Stream requestStream = request.GetRequestStream())
@@ -247,24 +268,37 @@ namespace Duo
                 request.Timeout = timeout;
             }
 
-            // Do the request and process the result.
-            HttpWebResponse response;
-            try
-            {
-                response = (HttpWebResponse)request.GetResponse();
-            }
-            catch (WebException ex)
-            {
-                response = (HttpWebResponse)ex.Response;
-                if (response == null)
+            return request;
+        }
+
+        private HttpWebResponse AttemptRetriableHttpRequest(
+            String method, String url, String auth, String date, String cannonParams, int timeout)
+        {
+            int backoffMs = INITIAL_BACKOFF_MS;
+            while(true) {
+                // Do the request and process the result.
+                HttpWebRequest request = PrepareHttpRequest(method, url, auth, date, cannonParams, timeout);
+                HttpWebResponse response;
+                try
                 {
-                    throw;
+                    response = (HttpWebResponse)request.GetResponse();
                 }
+                catch (WebException ex)
+                {
+                    response = (HttpWebResponse)ex.Response;
+                    if (response == null)
+                    {
+                        throw;
+                    }
+                }
+
+                if (response.StatusCode != (HttpStatusCode)RATE_LIMIT_HTTP_CODE || backoffMs > MAX_BACKOFF_MS) {
+                    return response;
+                }
+
+                sleepService.Sleep(backoffMs + randomService.GetInt(1001));
+                backoffMs *= BACKOFF_FACTOR;
             }
-            StreamReader reader
-                = new StreamReader(response.GetResponseStream());
-            statusCode = response.StatusCode;
-            return reader.ReadToEnd();
         }
 
         /// <param name="date">The current date and time, used to authenticate
@@ -673,6 +707,34 @@ namespace Duo
             }
             return String.Format(
                 "Got error {0} with HTTP Status {1}", inner_message, http_status);
+        }
+    }
+
+    public interface SleepService
+    {
+        void Sleep(int ms);
+    }
+
+    public interface RandomService
+    {
+        int GetInt(int maxInt);
+    }
+
+    class ThreadSleepService : SleepService
+    {
+        public void Sleep(int ms)
+        {
+            System.Threading.Thread.Sleep(ms);
+        }
+    }
+
+    class SystemRandomService : RandomService
+    {
+        private Random rand = new Random();
+
+        public int GetInt(int maxInt)
+        {
+            return rand.Next(maxInt);
         }
     }
 }

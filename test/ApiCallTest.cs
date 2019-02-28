@@ -10,18 +10,50 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 // Subclass DuoApi so we can test using HTTP rather than HTTPS
 public class TestDuoApi : DuoApi
 {
+    public MockSleeper sleeper;
+    public MockRandom random;
     public TestDuoApi(string ikey, string skey, string host)
-        : base(ikey, skey, host, null, "http")
+        : this(ikey, skey, host, null)
     {
     }
     public TestDuoApi(string ikey, string skey, string host, string user_agent)
-        : base(ikey, skey, host, user_agent, "http")
+        : this(ikey, skey, host, user_agent, new MockSleeper(), new MockRandom())
     {
+    }
+
+    public TestDuoApi(string ikey, string skey, string host, string user_agent, MockSleeper sleeper, MockRandom random)
+        : base(ikey, skey, host, user_agent, "http", sleeper, random)
+    {
+        this.sleeper = sleeper;
+        this.random = random;
+    }
+}
+
+public class MockSleeper : SleepService
+{
+    public List<long> sleepCalls = new List<long>();
+
+    public void Sleep(int ms)
+    {
+        sleepCalls.Add(ms);
+    }
+}
+
+public class MockRandom : RandomService
+{
+    public List<int> randomCalls = new List<int>();
+
+    public int GetInt(int maxInt)
+    {
+        randomCalls.Add(maxInt);
+        return 123;
     }
 }
 
 public class TestServer
 {
+    public int requestsToHandle = 1;
+
     public TestServer(string ikey, string skey)
     {
         this.ikey = ikey;
@@ -30,6 +62,7 @@ public class TestServer
 
     public delegate string TestDispatchHandler(HttpListenerContext ctx);
     public TestDispatchHandler handler {
+
         get
         {
             lock (this)
@@ -51,34 +84,37 @@ public class TestServer
         listener.Prefixes.Add("http://localhost:8080/");
         listener.Start();
 
-        // Wait for a request
-        HttpListenerContext context = listener.GetContext();
-        HttpListenerRequest request = context.Request;
-
-        // process the request
-        string path = request.Url.AbsolutePath;
-        string responseString;
-
-        try
+        for (int i = 0; i < requestsToHandle; i++)
         {
-            responseString = handler(context);
-        }
-        catch (Exception e)
-        {
-            responseString = e.ToString();
-        }
+            // Wait for a request
+            HttpListenerContext context = listener.GetContext();
+            HttpListenerRequest request = context.Request;
 
-        // write the response
-        HttpListenerResponse response = context.Response;
-        System.IO.Stream output = response.OutputStream;
+            // process the request
+            string path = request.Url.AbsolutePath;
+            string responseString;
 
-        if (!String.IsNullOrEmpty(responseString))
-        {
-            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-            response.ContentLength64 = buffer.Length;
-            output.Write(buffer, 0, buffer.Length);
+            try
+            {
+                responseString = handler(context);
+            }
+            catch (Exception e)
+            {
+                responseString = e.ToString();
+            }
+
+            // write the response
+            HttpListenerResponse response = context.Response;
+            System.IO.Stream output = response.OutputStream;
+
+            if (!String.IsNullOrEmpty(responseString))
+            {
+                byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                response.ContentLength64 = buffer.Length;
+                output.Write(buffer, 0, buffer.Length);
+            }
+            output.Close();
         }
-        output.Close();
 
         // shut down the listener
         listener.Stop();
@@ -438,6 +474,66 @@ public class TestApiCall
         {
             Assert.AreEqual(e.HttpStatus, 500);
         }
+    }
+
+    [TestMethod]
+    public void TestRateLimitThenSuccess()
+    {
+        List<int> statusCodes = new List<int>() { 429, 200 };
+        int callCount = 0;
+        srv.handler = delegate(HttpListenerContext ctx)
+        {
+            callCount++;
+            ctx.Response.StatusCode = statusCodes[0];
+            statusCodes.RemoveAt(0);
+            return "foobar";
+        };
+        srv.requestsToHandle = 2;
+
+        HttpStatusCode code;
+        string response = api.ApiCall("GET", "/hello", new Dictionary<string, string>(), 10000, out code);
+
+        Assert.AreEqual(code, HttpStatusCode.OK);
+        Assert.AreEqual(api.sleeper.sleepCalls.Count, 1);
+        Assert.AreEqual(api.sleeper.sleepCalls[0], 1123);
+        Assert.AreEqual(api.random.randomCalls.Count, 1);
+        Assert.AreEqual(api.random.randomCalls[0], 1001);
+    }
+
+    [TestMethod]
+    public void TestRateLimitedCompletely()
+    {
+        List<int> statusCodes = new List<int>() { 429, 429, 429, 429, 429, 429, 429 };
+        int callCount = 0;
+        srv.handler = delegate(HttpListenerContext ctx)
+        {
+            callCount++;
+            ctx.Response.StatusCode = statusCodes[0];
+            statusCodes.RemoveAt(0);
+            return "foobar";
+        };
+        srv.requestsToHandle = 7;
+
+        HttpStatusCode code;
+        string response = api.ApiCall("GET", "/hello", new Dictionary<string, string>(), 10000, out code);
+
+        Assert.AreEqual(code, (HttpStatusCode) 429);
+        Assert.AreEqual(callCount, 7);
+        Assert.AreEqual(api.sleeper.sleepCalls.Count, 6);
+        Assert.AreEqual(api.sleeper.sleepCalls[0], 1123);
+        Assert.AreEqual(api.sleeper.sleepCalls[1], 2123);
+        Assert.AreEqual(api.sleeper.sleepCalls[2], 4123);
+        Assert.AreEqual(api.sleeper.sleepCalls[3], 8123);
+        Assert.AreEqual(api.sleeper.sleepCalls[4], 16123);
+        Assert.AreEqual(api.sleeper.sleepCalls[5], 32123);
+
+        Assert.AreEqual(api.random.randomCalls.Count, 6);
+        Assert.AreEqual(api.random.randomCalls[0], 1001);
+        Assert.AreEqual(api.random.randomCalls[1], 1001);
+        Assert.AreEqual(api.random.randomCalls[2], 1001);
+        Assert.AreEqual(api.random.randomCalls[3], 1001);
+        Assert.AreEqual(api.random.randomCalls[4], 1001);
+        Assert.AreEqual(api.random.randomCalls[5], 1001);
     }
 
     private TestServer srv;
