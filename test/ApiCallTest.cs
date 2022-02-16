@@ -4,8 +4,7 @@ using System.Net;
 using System.Threading;
 using System.Collections.Generic;
 using System.IO;
-
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xunit;
 
 // Subclass DuoApi so we can test using HTTP rather than HTTPS
 public class TestDuoApi : DuoApi
@@ -61,7 +60,8 @@ public class TestServer
     }
 
     public delegate string TestDispatchHandler(HttpListenerContext ctx);
-    public TestDispatchHandler handler {
+    public TestDispatchHandler handler
+    {
 
         get
         {
@@ -70,7 +70,8 @@ public class TestServer
                 return this._handler;
             }
         }
-        set {
+        set
+        {
             lock (this)
             {
                 this._handler = value;
@@ -124,17 +125,20 @@ public class TestServer
     private string skey;
     private TestDispatchHandler _handler;
 }
-
-
-[TestClass]
 public class TestApiCall
 {
     private const string test_ikey = "DI9FD6NAKXN4B9DTCCB7";
     private const string test_skey = "RScfSuMrpL52TaciEhGtZkGjg8W4JSe5luPL63J8";
     private const string test_host = "localhost:8080";
 
-    [TestInitialize]
-    public void SetUp()
+    private TestServer srv;
+    private Thread srvThread;
+    private TestDuoApi api;
+
+    /// <summary>
+    /// 
+    /// </summary>
+    public TestApiCall()
     {
         api = new TestDuoApi(test_ikey, test_skey, test_host);
         srv = new TestServer(test_ikey, test_skey);
@@ -142,44 +146,44 @@ public class TestApiCall
         srvThread.Start();
     }
 
-    [TestCleanup]
-    public void CleanUp()
+    ~TestApiCall()
     {
         srvThread.Join();
     }
 
-    [TestMethod]
+    [Fact]
     public void Test401Response()
     {
-        srv.handler = delegate(HttpListenerContext ctx) {
+        srv.handler = delegate (HttpListenerContext ctx)
+        {
             ctx.Response.StatusCode = 401;
             return "Hello, Unauthorized World!";
         };
 
         HttpStatusCode code;
         string response = api.ApiCall("GET", "/401", new Dictionary<string, string>(), 10000, out code);
-        Assert.AreEqual(code, HttpStatusCode.Unauthorized);
-        Assert.AreEqual(response, "Hello, Unauthorized World!");
+        Assert.Equal(HttpStatusCode.Unauthorized, code);
+        Assert.Equal("Hello, Unauthorized World!", response);
     }
 
-    [TestMethod]
+    [Fact]
     public void Test200Response()
     {
-        srv.handler = delegate(HttpListenerContext ctx)
+        srv.handler = delegate (HttpListenerContext ctx)
         {
             return "Hello, World!";
         };
 
         HttpStatusCode code;
         string response = api.ApiCall("GET", "/hello", new Dictionary<string, string>(), 10000, out code);
-        Assert.AreEqual(code, HttpStatusCode.OK);
-        Assert.AreEqual(response, "Hello, World!");
+        Assert.Equal(HttpStatusCode.OK, code);
+        Assert.Equal("Hello, World!", response);
     }
 
-    [TestMethod]
+    [Fact]
     public void TestDefaultUserAgent()
     {
-        srv.handler = delegate(HttpListenerContext ctx)
+        srv.handler = delegate (HttpListenerContext ctx)
         {
             Console.WriteLine(String.Format("User-Agent is: {0}", ctx.Request.UserAgent));
             return ctx.Request.UserAgent;
@@ -187,26 +191,26 @@ public class TestApiCall
 
         HttpStatusCode code;
         string response = api.ApiCall("GET", "/DefaultUserAgent", new Dictionary<string, string>(), 10000, out code);
-        Assert.AreEqual(code, HttpStatusCode.OK);
-        StringAssert.StartsWith(response, api.DEFAULT_AGENT);
+        Assert.Equal(HttpStatusCode.OK, code);
+        Assert.StartsWith(api.DEFAULT_AGENT, response);
     }
 
-    [TestMethod]
+    [Fact]
     public void TestCustomUserAgent()
     {
         api = new TestDuoApi(test_ikey, test_skey, test_host, "CustomUserAgent/1.0");
-        srv.handler = delegate(HttpListenerContext ctx)
+        srv.handler = delegate (HttpListenerContext ctx)
         {
             return ctx.Request.UserAgent;
         };
 
         HttpStatusCode code;
         string response = api.ApiCall("GET", "/CustomUserAgent", new Dictionary<string, string>(), 10000, out code);
-        Assert.AreEqual(code, HttpStatusCode.OK);
-        Assert.AreEqual("CustomUserAgent/1.0", response);
+        Assert.Equal(HttpStatusCode.OK, code);
+        Assert.Equal("CustomUserAgent/1.0", response);
     }
 
-    [TestMethod]
+    [Fact]
     public void TestGetParameterSigning()
     {
         Dictionary<string, string> parameters = new Dictionary<string, string>
@@ -215,7 +219,8 @@ public class TestApiCall
             {"param2", "bar"}
         };
 
-        srv.handler = delegate(HttpListenerContext ctx) {
+        srv.handler = delegate (HttpListenerContext ctx)
+        {
             if (ctx.Request.HttpMethod != "GET")
             {
                 return "bad method!";
@@ -241,15 +246,15 @@ public class TestApiCall
                 return "bad signature";
             }
             return "OK";
-            
+
         };
 
         HttpStatusCode code;
         string response = api.ApiCall("GET", "/get_params", parameters, 10000, out code);
-        Assert.AreEqual("OK", response);
+        Assert.Equal("OK", response);
     }
 
-    [TestMethod]
+    [Fact]
     public void TestPostParameterSigning()
     {
         Dictionary<string, string> parameters = new Dictionary<string, string>
@@ -258,7 +263,7 @@ public class TestApiCall
             {"param2", "bar"}
         };
 
-        srv.handler = delegate(HttpListenerContext ctx)
+        srv.handler = delegate (HttpListenerContext ctx)
         {
             if (ctx.Request.HttpMethod != "POST")
             {
@@ -290,10 +295,10 @@ public class TestApiCall
 
         HttpStatusCode code;
         string response = api.ApiCall("POST", "/get_params", parameters, 10000, out code);
-        Assert.AreEqual("OK", response);
+        Assert.Equal("OK", response);
     }
 
-    [TestMethod]
+    [Fact]
     public void TestPostParameterSigningCustomDate()
     {
         Dictionary<string, string> parameters = new Dictionary<string, string>
@@ -302,7 +307,7 @@ public class TestApiCall
             {"param2", "bar"}
         };
 
-        srv.handler = delegate(HttpListenerContext ctx)
+        srv.handler = delegate (HttpListenerContext ctx)
         {
             if (ctx.Request.HttpMethod != "POST")
             {
@@ -340,46 +345,40 @@ public class TestApiCall
         DateTime date = new DateTime(2013, 11, 11, 22, 34, 00, DateTimeKind.Utc);
         HttpStatusCode status_code;
         string response = api.ApiCall("POST", "/get_params", parameters, 10000, date, out status_code);
-        Assert.AreEqual("OK", response);
+        Assert.Equal("OK", response);
     }
 
 
-    [TestMethod]
+    [Fact]
     public void TestJsonTimeout()
     {
-        srv.handler = delegate(HttpListenerContext ctx)
+        srv.handler = delegate (HttpListenerContext ctx)
         {
             Thread.Sleep(2 * 1000);
             return "You should've timed out!";
         };
 
-        try
+        var ex = Record.Exception(() =>
         {
             string response = api.JSONApiCall<string>("GET", "/timeout", new Dictionary<string, string>(), 500);
-            Assert.Fail("Did not raise a Timeout exception!");
-        }
-        catch (WebException ex)
-        {
-            Assert.AreEqual(ex.Status, WebExceptionStatus.Timeout);
-        }
-        catch (Exception ex)
-        {
-            Assert.Fail("Raised the wrong type of Exception: {0}", ex);
-        }
+        });
+
+        var we = Assert.IsType<WebException>(ex);
+        Assert.Equal(WebExceptionStatus.Timeout, we.Status);
     }
 
-    [TestMethod]
+    [Fact]
     public void TestValidJsonResponse()
     {
-        srv.handler = delegate(HttpListenerContext ctx)
+        srv.handler = delegate (HttpListenerContext ctx)
         {
             return "{\"stat\": \"OK\", \"response\": \"hello, world!\"}";
         };
-        string response = api.JSONApiCall<string>("GET", "/json_ok", new Dictionary<string,string>());
-        Assert.AreEqual(response, "hello, world!");
+        string response = api.JSONApiCall<string>("GET", "/json_ok", new Dictionary<string, string>());
+        Assert.Equal("hello, world!", response);
     }
 
-    [TestMethod]
+    [Fact]
     public void TestValidJsonPagingResponseNoParameters()
     {
         srv.handler = delegate (HttpListenerContext ctx)
@@ -388,14 +387,14 @@ public class TestApiCall
         };
         var parameters = new Dictionary<string, string>();
         var jsonResponse = api.JSONPagingApiCall("GET", "/json_ok", parameters, 0, 10);
-        Assert.AreEqual(jsonResponse["response"], "hello, world!");
+        Assert.Equal("hello, world!", jsonResponse["response"]);
         var metadata = jsonResponse["metadata"] as Dictionary<string, object>;
-        Assert.AreEqual(metadata["next_offset"], 10);
+        Assert.Equal(10, metadata["next_offset"]);
         // make sure parameters was not changed as a side-effect
-        Assert.AreEqual(parameters.Count, 0);
+        Assert.Empty(parameters);
     }
 
-    [TestMethod]
+    [Fact]
     public void TestValidJsonPagingResponseExistingParameters()
     {
         srv.handler = delegate (HttpListenerContext ctx)
@@ -408,80 +407,86 @@ public class TestApiCall
             {"limit", "10"}
         };
         var jsonResponse = api.JSONPagingApiCall("GET", "/json_ok", parameters, 10, 20);
-        Assert.AreEqual(jsonResponse["response"], "hello, world!");
+        Assert.Equal("hello, world!", jsonResponse["response"]);
         var metadata = jsonResponse["metadata"] as Dictionary<string, object>;
-        Assert.IsFalse(metadata.ContainsKey("next_offset"));
+        Assert.False(metadata.ContainsKey("next_offset"));
         // make sure parameters was not changed as a side-effect
-        Assert.AreEqual(parameters.Count, 2);
-        Assert.AreEqual(parameters["offset"], "0");
-        Assert.AreEqual(parameters["limit"], "10");
+        Assert.Equal(2, parameters.Count);
+        Assert.Equal("0", parameters["offset"]);
+        Assert.Equal("10", parameters["limit"]);
     }
 
-    [TestMethod]
+    [Fact]
     public void TestErrorJsonResponse()
     {
-        srv.handler = delegate(HttpListenerContext ctx)
+        srv.handler = delegate (HttpListenerContext ctx)
         {
             ctx.Response.StatusCode = 400;
             return "{\"stat\": \"FAIL\", \"message\": \"Missing required request parameters\", \"code\": 40001, \"message_detail\": \"user_id or username\"}";
         };
-        try {
-            string response = api.JSONApiCall<string>("GET", "/json_error", new Dictionary<string,string>());
-            Assert.Fail("Didn't raise ApiException");
-        }
-        catch (ApiException e)
+
+        var ex = Record.Exception(() =>
         {
-            Assert.AreEqual(e.HttpStatus, 400);
-            Assert.AreEqual(e.Code, 40001);
-            Assert.AreEqual(e.ApiMessage, "Missing required request parameters");
-            Assert.AreEqual(e.ApiMessageDetail, "user_id or username");
-        }
+            string response = api.JSONApiCall<string>("GET", "/json_error", new Dictionary<string, string>());
+        });
+
+        Assert.NotNull(ex);
+        var e = Assert.IsType<ApiException>(ex);
+
+
+        Assert.Equal(400, e.HttpStatus);
+        Assert.Equal(40001, e.Code);
+        Assert.Equal("Missing required request parameters", e.ApiMessage);
+        Assert.Equal("user_id or username", e.ApiMessageDetail);
+
     }
 
-    [TestMethod]
+    [Fact]
     public void TestJsonResponseMissingField()
     {
-        srv.handler = delegate(HttpListenerContext ctx)
+        srv.handler = delegate (HttpListenerContext ctx)
         {
             ctx.Response.StatusCode = 400;
             return "{\"message\": \"Missing required request parameters\", \"code\": 40001, \"message_detail\": \"user_id or username\"}";
         };
-        try
+
+        var ex = Record.Exception(() =>
         {
             string response = api.JSONApiCall<string>("GET", "/json_missing_field", new Dictionary<string, string>());
-            Assert.Fail("Didn't raise ApiException");
-        }
-        catch (BadResponseException e)
-        {
-            Assert.AreEqual(e.HttpStatus, 400);
-        }
+        });
+
+        Assert.NotNull(ex);
+        var e = Assert.IsType<BadResponseException>(ex);
+
+        Assert.Equal(400, e.HttpStatus);
+
     }
 
-    [TestMethod]
+    [Fact]
     public void TestJsonUnparseableResponse()
     {
-        srv.handler = delegate(HttpListenerContext ctx)
+        srv.handler = delegate (HttpListenerContext ctx)
         {
             ctx.Response.StatusCode = 500;
             return "this is not json";
         };
-        try
+        var ex = Record.Exception(() =>
         {
             string response = api.JSONApiCall<string>("GET", "/json_bad", new Dictionary<string, string>());
-            Assert.Fail("Didn't raise ApiException");
-        }
-        catch (BadResponseException e)
-        {
-            Assert.AreEqual(e.HttpStatus, 500);
-        }
+        });
+
+        Assert.NotNull(ex);
+        var e = Assert.IsType<BadResponseException>(ex);
+        Assert.Equal(500, e.HttpStatus);
+
     }
 
-    [TestMethod]
+    [Fact]
     public void TestRateLimitThenSuccess()
     {
         List<int> statusCodes = new List<int>() { 429, 200 };
         int callCount = 0;
-        srv.handler = delegate(HttpListenerContext ctx)
+        srv.handler = delegate (HttpListenerContext ctx)
         {
             callCount++;
             ctx.Response.StatusCode = statusCodes[0];
@@ -493,19 +498,19 @@ public class TestApiCall
         HttpStatusCode code;
         string response = api.ApiCall("GET", "/hello", new Dictionary<string, string>(), 10000, out code);
 
-        Assert.AreEqual(code, HttpStatusCode.OK);
-        Assert.AreEqual(api.sleeper.sleepCalls.Count, 1);
-        Assert.AreEqual(api.sleeper.sleepCalls[0], 1123);
-        Assert.AreEqual(api.random.randomCalls.Count, 1);
-        Assert.AreEqual(api.random.randomCalls[0], 1001);
+        Assert.Equal(HttpStatusCode.OK, code);
+        Assert.Single(api.sleeper.sleepCalls);
+        Assert.Equal(1123, api.sleeper.sleepCalls[0]);
+        Assert.Single(api.random.randomCalls);
+        Assert.Equal(1001, api.random.randomCalls[0]);
     }
 
-    [TestMethod]
+    [Fact]
     public void TestRateLimitedCompletely()
     {
         List<int> statusCodes = new List<int>() { 429, 429, 429, 429, 429, 429, 429 };
         int callCount = 0;
-        srv.handler = delegate(HttpListenerContext ctx)
+        srv.handler = delegate (HttpListenerContext ctx)
         {
             callCount++;
             ctx.Response.StatusCode = statusCodes[0];
@@ -517,26 +522,22 @@ public class TestApiCall
         HttpStatusCode code;
         string response = api.ApiCall("GET", "/hello", new Dictionary<string, string>(), 10000, out code);
 
-        Assert.AreEqual(code, (HttpStatusCode) 429);
-        Assert.AreEqual(callCount, 7);
-        Assert.AreEqual(api.sleeper.sleepCalls.Count, 6);
-        Assert.AreEqual(api.sleeper.sleepCalls[0], 1123);
-        Assert.AreEqual(api.sleeper.sleepCalls[1], 2123);
-        Assert.AreEqual(api.sleeper.sleepCalls[2], 4123);
-        Assert.AreEqual(api.sleeper.sleepCalls[3], 8123);
-        Assert.AreEqual(api.sleeper.sleepCalls[4], 16123);
-        Assert.AreEqual(api.sleeper.sleepCalls[5], 32123);
+        Assert.Equal(code, (HttpStatusCode)429);
+        Assert.Equal(7, callCount);
+        Assert.Equal(6, api.sleeper.sleepCalls.Count);
+        Assert.Equal(1123, api.sleeper.sleepCalls[0]);
+        Assert.Equal(2123, api.sleeper.sleepCalls[1]);
+        Assert.Equal(4123, api.sleeper.sleepCalls[2]);
+        Assert.Equal(8123, api.sleeper.sleepCalls[3]);
+        Assert.Equal(16123, api.sleeper.sleepCalls[4]);
+        Assert.Equal(32123, api.sleeper.sleepCalls[5]);
 
-        Assert.AreEqual(api.random.randomCalls.Count, 6);
-        Assert.AreEqual(api.random.randomCalls[0], 1001);
-        Assert.AreEqual(api.random.randomCalls[1], 1001);
-        Assert.AreEqual(api.random.randomCalls[2], 1001);
-        Assert.AreEqual(api.random.randomCalls[3], 1001);
-        Assert.AreEqual(api.random.randomCalls[4], 1001);
-        Assert.AreEqual(api.random.randomCalls[5], 1001);
+        Assert.Equal(6, api.random.randomCalls.Count);
+        Assert.Equal(1001, api.random.randomCalls[0]);
+        Assert.Equal(1001, api.random.randomCalls[1]);
+        Assert.Equal(1001, api.random.randomCalls[2]);
+        Assert.Equal(1001, api.random.randomCalls[3]);
+        Assert.Equal(1001, api.random.randomCalls[4]);
+        Assert.Equal(1001, api.random.randomCalls[5]);
     }
-
-    private TestServer srv;
-    private Thread srvThread;
-    private TestDuoApi api;
 }

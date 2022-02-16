@@ -6,7 +6,7 @@
 using System;
 using System.Collections.Generic;
 
-class DuoAdmin
+public class Program
 {
     static int Main(string[] args)
     {

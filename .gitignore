@@ -7,3 +7,9 @@ bin/
 obj/
 .vscode/
 .vs/
+*.user
+
+packages/
+
+*.ncrunchsolution
+_NCrunch_*/

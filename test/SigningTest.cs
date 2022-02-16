@@ -6,12 +6,10 @@
 using Duo;
 using System.Collections.Generic;
 
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-
-[TestClass]
+using Xunit;
 public class SigningTest
 {
-    [TestMethod]
+    [Fact]
     public void HmacSha512()
     {
         var ikey = "test_ikey";
@@ -31,6 +29,6 @@ public class SigningTest
         string canon_params = DuoApi.CanonicalizeParams(parameters);
         var actual = client.Sign(method, path, canon_params, date);
         var expected = "Basic dGVzdF9pa2V5OjA1MDgwNjUwMzVhMDNiMmExZGUyZjQ1M2U2MjllNzkxZDE4MDMyOWUxNTdmNjVkZjZiM2UwZjA4Mjk5ZDQzMjFlMWM1YzdhN2M3ZWU2YjllNWZjODBkMWZiNmZiZjNhZDVlYjdjNDRkZDNiMzk4NWEwMmMzN2FjYTUzZWMzNjk4";
-        Assert.AreEqual(expected, actual);
+        Assert.Equal(expected, actual);
     }
 }
