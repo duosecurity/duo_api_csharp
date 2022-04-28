@@ -468,7 +468,7 @@ namespace Duo
         private string HmacSign(string data)
         {
             byte[] key_bytes = ASCIIEncoding.ASCII.GetBytes(this.skey);
-            HMACSHA1 hmac = new HMACSHA1(key_bytes);
+            HMACSHA512 hmac = new HMACSHA512(key_bytes);
 
             byte[] data_bytes = ASCIIEncoding.ASCII.GetBytes(data);
             hmac.ComputeHash(data_bytes);
