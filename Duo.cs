@@ -490,7 +490,7 @@ namespace Duo
             // between the offset's hours and minutes.
             string date_string = date.ToString(
                 "ddd, dd MMM yyyy HH:mm:ss", CultureInfo.InvariantCulture);
-            int offset = TimeZone.CurrentTimeZone.GetUtcOffset(date).Hours;
+            int offset = TimeZoneInfo.Local.GetUtcOffset(date).Hours;
             string zone;
             // + or -, then 0-pad, then offset, then more 0-padding.
             if (offset < 0)
