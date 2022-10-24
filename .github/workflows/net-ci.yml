@@ -1,0 +1,29 @@
+name: .NET CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # Build and test on .NET Framework
+  dotnet-framework-ci:
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v1
+
+      - name: Set up VSTest
+        uses: darenm/Setup-VSTest@v1
+
+      - name: Build DuoApiTest solution
+        run: msbuild.exe test/DuoAPiTest.sln
+
+      - name: Run Tests dll
+        run: vstest.console.exe .\test\bin\Debug\test.dll
