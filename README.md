@@ -1,4 +1,5 @@
 # Overview
+[![Build Status](https://github.com/duosecurity/duo_api_csharp/actions/workflows/net-ci.yml/badge.svg?branch=master)](https://github.com/duosecurity/duo_api_csharp/actions)
 [![Issues](https://img.shields.io/github/issues/duosecurity/duo_api_csharp)](https://github.com/duosecurity/duo_api_csharp/issues)
 [![Forks](https://img.shields.io/github/forks/duosecurity/duo_api_csharp)](https://github.com/duosecurity/duo_api_csharp/network/members)
 [![Stars](https://img.shields.io/github/stars/duosecurity/duo_api_csharp)](https://github.com/duosecurity/duo_api_csharp/stargazers)
