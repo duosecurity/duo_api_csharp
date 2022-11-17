@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Duo Security
+ * Copyright (c) 2022 Cisco Systems, Inc. and/or its affiliates
  * All rights reserved
  */
 
