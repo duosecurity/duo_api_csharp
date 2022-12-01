@@ -2,17 +2,17 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.32126.317
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "duo_api_csharp", "duo_api_csharp\duo_api_csharp.csproj", "{6E96C9D9-0825-4D26-83C7-8A62180F8FB9}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuoApiTest", "test\DuoApiTest.csproj", "{6B97B9FB-E553-494C-BD50-4BF7DB5C2184}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{E739E3FE-D923-480A-9B01-3B2A623067E3}"
 	ProjectSection(SolutionItems) = preProject
 		LICENSE = LICENSE
 		README.md = README.md
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Examples", "Examples\Examples.csproj", "{C089A10B-646D-407E-A2B8-848C6C522B13}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DuoApi", "DuoApi\DuoApi.csproj", "{83919561-1430-4928-B231-02A77D8B9AD3}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DuoApi.Tests", "DuoApi.Tests\DuoApi.Tests.csproj", "{A0508DF1-F0F6-4A5E-B1F8-015D8C37E165}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DuoApi.Examples", "DuoApi.Examples\DuoApi.Examples.csproj", "{834D5CD4-19F2-4434-A35C-9D6C3FBCED1B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -20,18 +20,18 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{6E96C9D9-0825-4D26-83C7-8A62180F8FB9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{6E96C9D9-0825-4D26-83C7-8A62180F8FB9}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{6E96C9D9-0825-4D26-83C7-8A62180F8FB9}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{6E96C9D9-0825-4D26-83C7-8A62180F8FB9}.Release|Any CPU.Build.0 = Release|Any CPU
-		{6B97B9FB-E553-494C-BD50-4BF7DB5C2184}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{6B97B9FB-E553-494C-BD50-4BF7DB5C2184}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{6B97B9FB-E553-494C-BD50-4BF7DB5C2184}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{6B97B9FB-E553-494C-BD50-4BF7DB5C2184}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C089A10B-646D-407E-A2B8-848C6C522B13}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C089A10B-646D-407E-A2B8-848C6C522B13}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C089A10B-646D-407E-A2B8-848C6C522B13}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C089A10B-646D-407E-A2B8-848C6C522B13}.Release|Any CPU.Build.0 = Release|Any CPU
+		{83919561-1430-4928-B231-02A77D8B9AD3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{83919561-1430-4928-B231-02A77D8B9AD3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{83919561-1430-4928-B231-02A77D8B9AD3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{83919561-1430-4928-B231-02A77D8B9AD3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A0508DF1-F0F6-4A5E-B1F8-015D8C37E165}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A0508DF1-F0F6-4A5E-B1F8-015D8C37E165}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A0508DF1-F0F6-4A5E-B1F8-015D8C37E165}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A0508DF1-F0F6-4A5E-B1F8-015D8C37E165}.Release|Any CPU.Build.0 = Release|Any CPU
+		{834D5CD4-19F2-4434-A35C-9D6C3FBCED1B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{834D5CD4-19F2-4434-A35C-9D6C3FBCED1B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{834D5CD4-19F2-4434-A35C-9D6C3FBCED1B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{834D5CD4-19F2-4434-A35C-9D6C3FBCED1B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

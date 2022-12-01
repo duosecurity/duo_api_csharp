@@ -4,25 +4,24 @@
  */
 
 using System;
-using System.Configuration;
 using System.Collections.Generic;
+using System.Configuration;
+using System.Globalization;
 using System.IO;
 using System.Net;
-using System.Security.Cryptography;
-using System.Text.RegularExpressions;
-using System.Text;
-using System.Web.Script.Serialization;
-using System.Web;
-using System.Globalization;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
-
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using System.Web;
 
 namespace Duo
 {
-    public class DuoApi
+	public class DuoApi
     {
         public string DEFAULT_AGENT = "DuoAPICSharp/1.0";
 
@@ -297,9 +296,12 @@ namespace Duo
             request.Headers.Add("Authorization", auth);
             request.Headers.Add("X-Duo-Date", date);
             request.UserAgent = this.user_agent;
+
+            //todo: Understand, handle and test proxy config
+
             // If no proxy, check for and use WinHTTP proxy as autoconfig won't pick this up when run from a service
-            if (!HasProxyServer(request))
-                request.Proxy = GetWinhttpProxy();
+            //if (!HasProxyServer(request))
+            //request.Proxy = GetWinhttpProxy();
 
             if (method.Equals("POST") || method.Equals("PUT"))
             {
@@ -377,45 +379,41 @@ namespace Duo
         /// calls (particularly in the Auth APIs) will not
         /// return a complete JSON response.</param>
         /// raises if JSON response indicates an error
-        private Dictionary<string, object> BaseJSONApiCall(string method,
+        private T BaseJSONApiCall<T>(string method,
                                 string path,
                                 Dictionary<string, string> parameters,
                                 int timeout,
-                                DateTime date)
+                                DateTime date,
+                                out PagingInfo metaData)
         {
             HttpStatusCode statusCode;
             string res = this.ApiCall(method, path, parameters, timeout, date, out statusCode);
 
-            var jss = new JavaScriptSerializer();
 
             try
             {
-                var dict = jss.Deserialize<Dictionary<string, object>>(res);
-                if (dict["stat"] as string == "OK")
+                var options = new JsonSerializerOptions
                 {
-                    return dict;
+                    PropertyNameCaseInsensitive = true
+                };
+
+                options.Converters.Add(new JsonStringEnumConverter());
+
+                var dict = JsonSerializer.Deserialize<DataEnvelope<T>>(res, options);
+                if (dict.stat == DuoApiResponseStatus.Ok)
+                {
+                    metaData = dict.metadata;
+                    return dict.response;
                 }
                 else
                 {
-                    int? check = dict["code"] as int?;
-                    int code;
-                    if (check.HasValue)
-                    {
-                        code = check.Value;
-                    }
-                    else
-                    {
-                        code = 0;
-                    }
-                    String message_detail = "";
-                    if (dict.ContainsKey("message_detail"))
-                    {
-                        message_detail = dict["message_detail"] as string;
-                    }
+
+                    int code = dict.code.GetValueOrDefault();
+
                     throw new ApiException(code,
                                            (int)statusCode,
-                                           dict["message"] as string,
-                                           message_detail);
+                                           dict.message,
+                                           dict.message_detail);
                 }
             }
             catch (ApiException)
@@ -470,17 +468,17 @@ namespace Duo
                                 DateTime date)
             where T : class
         {
-            var dict = BaseJSONApiCall(method, path, parameters, timeout, date);
-            return dict["response"] as T;
+            return BaseJSONApiCall<T>(method, path, parameters, timeout, date, out _);
         }
 
-        public Dictionary<string, object> JSONPagingApiCall(string method,
+        public T JSONPagingApiCall<T>(string method,
                                string path,
                                Dictionary<string, string> parameters,
                                int offset,
-                               int limit)
+                               int limit,
+                               out PagingInfo metaData)
         {
-            return JSONPagingApiCall(method, path, parameters, offset, limit, 0, DateTime.UtcNow);
+            return JSONPagingApiCall<T>(method, path, parameters, offset, limit, 0, DateTime.UtcNow, out metaData);
         }
 
         /// <param name="date">The current date and time, used to authenticate
@@ -503,20 +501,21 @@ namespace Duo
         /// return a JSON dictionary with top level keys: stat, response, metadata.
         /// The actual requested data is in 'response'.  'metadata' contains a
         /// 'next_offset' key which should be used to fetch the next page.
-        public Dictionary<string, object> JSONPagingApiCall(string method,
+        public T JSONPagingApiCall<T>(string method,
                                 string path,
                                 Dictionary<string, string> parameters,
                                 int offset,
                                 int limit,
                                 int timeout,
-                                DateTime date)
+                                DateTime date,
+                                out PagingInfo metaData)
         {
             // copy parameters so we don't cause any side-effects
             parameters = new Dictionary<string, string>(parameters);
             parameters["offset"] = offset.ToString(); // overrides caller value
             parameters["limit"] = limit.ToString();
 
-            return this.BaseJSONApiCall(method, path, parameters, timeout, date);
+            return this.BaseJSONApiCall<T>(method, path, parameters, timeout, date, out metaData);
         }
 
 
@@ -578,98 +577,98 @@ namespace Duo
             return date_string;
         }
 
-        /// <summary>
-        /// Gets the WinHTTP proxy.
-        /// </summary>
-        /// <remarks>
-        /// Normally, C# picks up these proxy settings by default, but when run under the SYSTEM account, it does not.
-        /// </remarks>
-        /// <returns></returns>
-        private static System.Net.WebProxy GetWinhttpProxy()
-        {
-            string[] proxyServerNames = null;
-            string primaryProxyServer = null;
-            string[] bypassHostnames = null;
-            bool enableLocalBypass = false;
-            System.Net.WebProxy winhttpProxy = null;
+        ///// <summary>
+        ///// Gets the WinHTTP proxy.
+        ///// </summary>
+        ///// <remarks>
+        ///// Normally, C# picks up these proxy settings by default, but when run under the SYSTEM account, it does not.
+        ///// </remarks>
+        ///// <returns></returns>
+        //private static System.Net.WebProxy GetWinhttpProxy()
+        //{
+        //    string[] proxyServerNames = null;
+        //    string primaryProxyServer = null;
+        //    string[] bypassHostnames = null;
+        //    bool enableLocalBypass = false;
+        //    System.Net.WebProxy winhttpProxy = null;
 
-            // Has a proxy been configured?
-            // No.  Is a WinHTTP proxy set?
-            int internetHandle = WinHttpOpen("DuoTest", WinHttp_Access_Type.WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, null, null, 0);
-            if (internetHandle != 0)
-            {
-                // Yes, use it.  This is normal when run under the SYSTEM account and a WinHTTP proxy is configured.  When run as a normal user,
-                // the Proxy property will already be configured correctly.  To resolve this for SYSTEM, manually read proxy settings and configure.
-                var proxyInfo = new WINHTTP_PROXY_INFO();
-                WinHttpGetDefaultProxyConfiguration(proxyInfo);
-                if (proxyInfo.lpszProxy != null)
-                {
-                    if (proxyInfo.lpszProxy != null)
-                    {
-                        proxyServerNames = proxyInfo.lpszProxy.Split(new char[] { ' ', '\t', ';' });
-                        if ((proxyServerNames == null) || (proxyServerNames.Length == 0))
-                            primaryProxyServer = proxyInfo.lpszProxy;
-                        else
-                            primaryProxyServer = proxyServerNames[0];
-                    }
-                    if (proxyInfo.lpszProxyBypass != null)
-                    {
-                        bypassHostnames = proxyInfo.lpszProxyBypass.Split(new char[] { ' ', '\t', ';' });
-                        if ((bypassHostnames == null) || (bypassHostnames.Length == 0))
-                            bypassHostnames = new string[] { proxyInfo.lpszProxyBypass };
-                        if (bypassHostnames != null)
-                            enableLocalBypass = bypassHostnames.Contains("local", StringComparer.InvariantCultureIgnoreCase);
-                    }
-                    if (primaryProxyServer != null)
-                        winhttpProxy = new System.Net.WebProxy(proxyServerNames[0], enableLocalBypass, bypassHostnames);
-                }
-                WinHttpCloseHandle(internetHandle);
-                internetHandle = 0;
-            }
-            else
-            {
-                throw new Exception(String.Format("WinHttp init failed {0}", System.Runtime.InteropServices.Marshal.GetLastWin32Error()));
-            }
+        //    // Has a proxy been configured?
+        //    // No.  Is a WinHTTP proxy set?
+        //    int internetHandle = WinHttpOpen("DuoTest", WinHttp_Access_Type.WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, null, null, 0);
+        //    if (internetHandle != 0)
+        //    {
+        //        // Yes, use it.  This is normal when run under the SYSTEM account and a WinHTTP proxy is configured.  When run as a normal user,
+        //        // the Proxy property will already be configured correctly.  To resolve this for SYSTEM, manually read proxy settings and configure.
+        //        var proxyInfo = new WINHTTP_PROXY_INFO();
+        //        WinHttpGetDefaultProxyConfiguration(proxyInfo);
+        //        if (proxyInfo.lpszProxy != null)
+        //        {
+        //            if (proxyInfo.lpszProxy != null)
+        //            {
+        //                proxyServerNames = proxyInfo.lpszProxy.Split(new char[] { ' ', '\t', ';' });
+        //                if ((proxyServerNames == null) || (proxyServerNames.Length == 0))
+        //                    primaryProxyServer = proxyInfo.lpszProxy;
+        //                else
+        //                    primaryProxyServer = proxyServerNames[0];
+        //            }
+        //            if (proxyInfo.lpszProxyBypass != null)
+        //            {
+        //                bypassHostnames = proxyInfo.lpszProxyBypass.Split(new char[] { ' ', '\t', ';' });
+        //                if ((bypassHostnames == null) || (bypassHostnames.Length == 0))
+        //                    bypassHostnames = new string[] { proxyInfo.lpszProxyBypass };
+        //                if (bypassHostnames != null)
+        //                    enableLocalBypass = bypassHostnames.Contains("local", StringComparer.InvariantCultureIgnoreCase);
+        //            }
+        //            if (primaryProxyServer != null)
+        //                winhttpProxy = new System.Net.WebProxy(proxyServerNames[0], enableLocalBypass, bypassHostnames);
+        //        }
+        //        WinHttpCloseHandle(internetHandle);
+        //        internetHandle = 0;
+        //    }
+        //    else
+        //    {
+        //        throw new Exception(String.Format("WinHttp init failed {0}", System.Runtime.InteropServices.Marshal.GetLastWin32Error()));
+        //    }
 
-            return winhttpProxy;
-        }
+        //    return winhttpProxy;
+        //}
 
-        /// <summary>
-        /// Determines if the specified web request is using a proxy server.
-        /// </summary>
-        /// <remarks>
-        /// If no proxy is set, the Proxy member is typically non-null and set to an object type that includes but hides IWebProxy with no address,
-        /// so it cannot be inspected.  Resolving this requires reflection to extract the hidden webProxy object and check it's Address member.
-        /// </remarks>
-        /// <param name="requestObject">Request to check</param>
-        /// <returns>TRUE if a proxy is in use, else FALSE</returns>
-        public static bool HasProxyServer(HttpWebRequest requestObject)
-        {
-            WebProxy actualProxy = null;
-            bool hasProxyServer = false;
+        ///// <summary>
+        ///// Determines if the specified web request is using a proxy server.
+        ///// </summary>
+        ///// <remarks>
+        ///// If no proxy is set, the Proxy member is typically non-null and set to an object type that includes but hides IWebProxy with no address,
+        ///// so it cannot be inspected.  Resolving this requires reflection to extract the hidden webProxy object and check it's Address member.
+        ///// </remarks>
+        ///// <param name="requestObject">Request to check</param>
+        ///// <returns>TRUE if a proxy is in use, else FALSE</returns>
+        //public static bool HasProxyServer(HttpWebRequest requestObject)
+        //{
+        //    WebProxy actualProxy = null;
+        //    bool hasProxyServer = false;
 
-            if (requestObject.Proxy != null)
-            {
-                // WebProxy is described as the base class for IWebProxy, so we should always see this type as the field is initialized by the framework.
-                if (!(requestObject.Proxy is WebProxy))
-                {
-                    var webProxyField = requestObject.Proxy.GetType().GetField("webProxy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
-                    if (webProxyField != null)
-                        actualProxy = webProxyField.GetValue(requestObject.Proxy) as WebProxy;
-                }
-                else
-                {
-                    actualProxy = requestObject.Proxy as WebProxy;
-                }
-                hasProxyServer = (actualProxy.Address != null);
-            }
-            else
-            {
-                hasProxyServer = false;
-            }
+        //    if (requestObject.Proxy != null)
+        //    {
+        //        // WebProxy is described as the base class for IWebProxy, so we should always see this type as the field is initialized by the framework.
+        //        if (!(requestObject.Proxy is WebProxy))
+        //        {
+        //            var webProxyField = requestObject.Proxy.GetType().GetField("webProxy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+        //            if (webProxyField != null)
+        //                actualProxy = webProxyField.GetValue(requestObject.Proxy) as WebProxy;
+        //        }
+        //        else
+        //        {
+        //            actualProxy = requestObject.Proxy as WebProxy;
+        //        }
+        //        hasProxyServer = (actualProxy.Address != null);
+        //    }
+        //    else
+        //    {
+        //        hasProxyServer = false;
+        //    }
 
-            return hasProxyServer;
-        }
+        //    return hasProxyServer;
+        //}
         #endregion Private Methods
 
         #region Private DllImport
@@ -707,7 +706,7 @@ namespace Duo
         private static extern bool WinHttpCloseHandle(int hInternet);
         #endregion Private DllImport
     }
- 
+
     [Serializable]
     public class DuoException : Exception
     {

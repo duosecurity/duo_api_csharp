@@ -391,10 +391,10 @@ public class TestApiCall
             return "{\"stat\": \"OK\", \"response\": \"hello, world!\", \"metadata\": {\"next_offset\":10}}";
         };
         var parameters = new Dictionary<string, string>();
-        var jsonResponse = api.JSONPagingApiCall("GET", "/json_ok", parameters, 0, 10);
-        Assert.Equal("hello, world!", jsonResponse["response"]);
-        var metadata = jsonResponse["metadata"] as Dictionary<string, object>;
-        Assert.Equal(10, metadata["next_offset"]);
+        var jsonResponse = api.JSONPagingApiCall<string>("GET", "/json_ok", parameters, 0, 10, out var metadata);
+        Assert.Equal("hello, world!", jsonResponse);
+        
+        Assert.Equal(10, metadata.next_offset);
         // make sure parameters was not changed as a side-effect
         Assert.Empty(parameters);
     }
@@ -411,10 +411,10 @@ public class TestApiCall
             {"offset", "0"},
             {"limit", "10"}
         };
-        var jsonResponse = api.JSONPagingApiCall("GET", "/json_ok", parameters, 10, 20);
-        Assert.Equal("hello, world!", jsonResponse["response"]);
-        var metadata = jsonResponse["metadata"] as Dictionary<string, object>;
-        Assert.False(metadata.ContainsKey("next_offset"));
+        var jsonResponse = api.JSONPagingApiCall<string>("GET", "/json_ok", parameters, 10, 20, out var metadata);
+        Assert.Equal("hello, world!", jsonResponse);
+        
+        Assert.NotNull(metadata);
         // make sure parameters was not changed as a side-effect
         Assert.Equal(2, parameters.Count);
         Assert.Equal("0", parameters["offset"]);
@@ -461,7 +461,7 @@ public class TestApiCall
         });
 
         Assert.NotNull(ex);
-        var e = Assert.IsType<BadResponseException>(ex);
+        var e = Assert.IsType<ApiException>(ex);
 
         Assert.Equal(400, e.HttpStatus);
 
