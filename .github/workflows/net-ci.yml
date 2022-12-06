@@ -46,6 +46,9 @@ jobs:
       - name: Set up VSTest
         uses: darenm/Setup-VSTest@v1
 
+      - name: Install dependencies
+        run: nuget restore
+
       - name: Build DuoApiTest solution
         run: msbuild.exe duo_api_csharp.sln
 
