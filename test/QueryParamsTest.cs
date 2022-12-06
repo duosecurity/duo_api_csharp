@@ -23,13 +23,15 @@ public class QueryParamsTest
     }
 
     [Fact]
-    public void ZeroParams() {
+    public void ZeroParams()
+    {
         var parameters = new Dictionary<string, string>();
         Assert.Equal("", DuoApi.CanonicalizeParams(parameters));
     }
 
     [Fact]
-    public void OneParam() {
+    public void OneParam()
+    {
         var parameters = new Dictionary<string, string>
             {
                 {"realname", "First Last"},
@@ -39,7 +41,8 @@ public class QueryParamsTest
     }
 
     [Fact]
-    public void PrintableASCII() {
+    public void PrintableASCII()
+    {
         var parameters = new Dictionary<string, string>
             {
                 {"digits", "0123456789"},
@@ -52,7 +55,8 @@ public class QueryParamsTest
     }
 
     [Fact]
-    public void UnicodeFuzzValues() {
+    public void UnicodeFuzzValues()
+    {
         var parameters = new Dictionary<string, string>
             {
                 {"bar", "\u2815\uaaa3\u37cf\u4bb7\u36e9\ucc05\u668e\u8162\uc2bd\ua1f1"},
@@ -93,7 +97,7 @@ public class QueryParamsTest
     [Fact]
     public void NextOffsetTest()
     {
-        string[] offset = new string[]{"fjaewoifjew", "473891274832917498"};
+        string[] offset = new string[] { "fjaewoifjew", "473891274832917498" };
         var parameters = new Dictionary<string, object>
             {
                 {"next_offset", offset},
