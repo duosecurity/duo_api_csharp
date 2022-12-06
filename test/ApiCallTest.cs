@@ -125,6 +125,53 @@ public class TestServer
     private string skey;
     private TestDispatchHandler _handler;
 }
+
+public class TestApiCallTimeout
+{
+    // New Class the test Timeout.
+    // There is no better solution so far to avoid TestServer's httpListner colision
+    private const string test_ikey = "DI9FD6NAKXN4B9DTCCB7";
+    private const string test_skey = "RScfSuMrpL52TaciEhGtZkGjg8W4JSe5luPL63J8";
+    private const string test_host = "localhost:8080";
+
+    private TestServer srv;
+    private Thread srvThread;
+    private TestDuoApi api;
+
+    /// <summary>
+    ///
+    /// </summary>
+    public TestApiCallTimeout()
+    {
+        api = new TestDuoApi(test_ikey, test_skey, test_host);
+        srv = new TestServer(test_ikey, test_skey);
+        srvThread = new Thread(srv.Run);
+        srvThread.Start();
+    }
+
+    ~TestApiCallTimeout()
+    {
+        srvThread.Join();
+    }
+
+    [Fact]
+    public void TestJsonTimeout()
+    {
+        srv.handler = delegate (HttpListenerContext ctx)
+        {
+            Thread.Sleep(2 * 1000);
+            return "You should've timed out!";
+        };
+
+        var ex = Record.Exception(() =>
+        {
+            string response = api.JSONApiCall<string>("GET", "/timeout", new Dictionary<string, string>(), 500);
+        });
+
+        var we = Assert.IsType<WebException>(ex);
+        Assert.Equal(WebExceptionStatus.Timeout, we.Status);
+    }
+}
 public class TestApiCall
 {
     private const string test_ikey = "DI9FD6NAKXN4B9DTCCB7";
