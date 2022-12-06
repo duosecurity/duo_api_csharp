@@ -214,7 +214,7 @@ namespace Duo
         {
             string canon_params = DuoApi.CanonicalizeParams(parameters);
             string query = "";
-            if (! method.Equals("POST") && ! method.Equals("PUT"))
+            if (!method.Equals("POST") && !method.Equals("PUT"))
             {
                 if (parameters.Count > 0)
                 {
@@ -275,7 +275,8 @@ namespace Duo
             String method, String url, String auth, String date, String cannonParams, int timeout)
         {
             int backoffMs = INITIAL_BACKOFF_MS;
-            while(true) {
+            while (true)
+            {
                 // Do the request and process the result.
                 HttpWebRequest request = PrepareHttpRequest(method, url, auth, date, cannonParams, timeout);
                 HttpWebResponse response;
@@ -292,7 +293,8 @@ namespace Duo
                     }
                 }
 
-                if (response.StatusCode != (HttpStatusCode)RATE_LIMIT_HTTP_CODE || backoffMs > MAX_BACKOFF_MS) {
+                if (response.StatusCode != (HttpStatusCode)RATE_LIMIT_HTTP_CODE || backoffMs > MAX_BACKOFF_MS)
+                {
                     return response;
                 }
 
@@ -453,15 +455,15 @@ namespace Duo
             return this.BaseJSONApiCall(method, path, parameters, timeout, date);
         }
 
- 
+
         /// Helper to format a User-Agent string with some information about
         /// the operating system / .NET runtime
         /// <param name="product_name">e.g. "FooClient/1.0"</param>
         public static string FormatUserAgent(string product_name)
         {
-           return String.Format(
-                "{0} ({1}; .NET {2})", product_name, System.Environment.OSVersion,
-                System.Environment.Version);
+            return String.Format(
+                 "{0} ({1}; .NET {2})", product_name, System.Environment.OSVersion,
+                 System.Environment.Version);
         }
 
         #region Private Methods
