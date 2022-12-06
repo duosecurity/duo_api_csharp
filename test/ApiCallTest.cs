@@ -129,7 +129,7 @@ public class TestServer
 public class TestApiCallTimeout
 {
     // New Class the test Timeout.
-    // There is no better solution so far to avoid TestServer's httpListner colision
+    // There is no better solution so far to avoid TestServer's httpListner collision
     private const string test_ikey = "DI9FD6NAKXN4B9DTCCB7";
     private const string test_skey = "RScfSuMrpL52TaciEhGtZkGjg8W4JSe5luPL63J8";
     private const string test_host = "localhost:8080";
