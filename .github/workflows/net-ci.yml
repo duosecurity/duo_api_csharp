@@ -3,12 +3,36 @@ name: .NET CI
 on:
   push:
     branches:
-      - master
+      - "*"
   pull_request:
     branches:
       - master
 
 jobs:
+# Build and test on .NET Core
+  dotnet-core-ci:
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v1.7.2
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Install dependencies
+        run: nuget restore
+
+      - name: Build solution
+        run: dotnet build
+
+      - name: Run tests
+        run: dotnet test
+
+      # - name: Run linter
+      #   run: dotnet format --verify-no-changes
+
   # Build and test on .NET Framework
   dotnet-framework-ci:
     runs-on: windows-2022
@@ -23,7 +47,7 @@ jobs:
         uses: darenm/Setup-VSTest@v1
 
       - name: Build DuoApiTest solution
-        run: msbuild.exe test/DuoAPiTest.sln
+        run: msbuild.exe duo_api_csharp.sln
 
-      - name: Run Tests dll
-        run: vstest.console.exe .\test\bin\Debug\test.dll
+      # - name: Run Tests dll
+      #   run: vstest.console.exe .\test\bin\Debug\test.dll
