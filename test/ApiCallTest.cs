@@ -79,11 +79,13 @@ public class TestServer
         }
     }
 
+    public HttpListener listener;
+
     public void Run()
     {
-        HttpListener listener = new HttpListener();
-        listener.Prefixes.Add("http://localhost:8080/");
-        listener.Start();
+        this.listener = new HttpListener();
+        this.listener.Prefixes.Add("http://localhost:8080/");
+        this.listener.Start();
 
         for (int i = 0; i < requestsToHandle; i++)
         {
@@ -118,7 +120,7 @@ public class TestServer
         }
 
         // shut down the listener
-        listener.Stop();
+        this.listener.Stop();
     }
 
     private string ikey;
@@ -365,6 +367,9 @@ public class TestApiCall
 
         var we = Assert.IsType<WebException>(ex);
         Assert.Equal(WebExceptionStatus.Timeout, we.Status);
+
+        // Free up listener for later tests 
+        srv.listener.Stop();
     }
 
     [Fact]
