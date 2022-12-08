@@ -15,6 +15,8 @@ using System.Web;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography.X509Certificates;
+using System.Net.Security;
 
 
 namespace Duo
@@ -34,6 +36,8 @@ namespace Duo
         private string user_agent;
         private SleepService sleepService;
         private RandomService randomService;
+        private bool sslCertValidation = true;
+        private X509CertificateCollection customRoots = null;
 
         /// <param name="ikey">Duo integration key</param>
         /// <param name="skey">Duo secret key</param>
@@ -69,6 +73,32 @@ namespace Duo
             {
                 this.user_agent = user_agent;
             }
+        }
+
+        ///  <summary>
+        /// Disables SSL certificate validation for the API calls the client makes.
+        /// Incomptible with UseCustomRootCertificates since certificates will not be checked.
+        /// 
+        /// THIS SHOULD NEVER BE USED IN A PRODUCTION ENVIRONMENT
+        /// </summary>
+        /// <returns>The DuoApi</returns>
+        public DuoApi DisableSslCertificateValidation()
+        {
+            sslCertValidation = false;
+            return this;
+        }
+
+        /// <summary>
+        /// Override the set of Duo root certificates used for certificate pinning.  Provide a collection of acceptable root certificates.
+        /// 
+        /// Incompatible with DisableSslCertificateValidation - if that is enabled, certificate pinning is not done at all. 
+        /// </summary>
+        /// <param name="customRoots">The custom set of root certificates to trust</param>
+        /// <returns>The DuoApi</returns>
+        public DuoApi UseCustomRootCertificates(X509CertificateCollection customRoots)
+        {
+            this.customRoots = customRoots;
+            return this;
         }
 
         public static string FinishCanonicalize(string p)
@@ -244,6 +274,7 @@ namespace Duo
             String cannonParams, int timeout)
         {
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+            request.ServerCertificateValidationCallback = GetCertificatePinner();
             request.Method = method;
             request.Accept = "application/json";
             request.Headers.Add("Authorization", auth);
@@ -269,6 +300,22 @@ namespace Duo
             }
 
             return request;
+        }
+
+        private RemoteCertificateValidationCallback GetCertificatePinner()
+        {
+            if (!sslCertValidation)
+            {
+                // Pinner that effectively disables cert pinning by always returning true
+                return CertificatePinnerFactory.GetCertificateDisabler();
+            }
+
+            if (customRoots != null)
+            {
+                return CertificatePinnerFactory.GetCustomRootCertificatesPinner(customRoots);
+            }
+
+            return CertificatePinnerFactory.GetDuoCertificatePinner();
         }
 
         private HttpWebResponse AttemptRetriableHttpRequest(
@@ -643,7 +690,7 @@ namespace Duo
         private static extern bool WinHttpCloseHandle(int hInternet);
         #endregion Private DllImport
     }
-
+ 
     [Serializable]
     public class DuoException : Exception
     {

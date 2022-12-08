@@ -44,7 +44,12 @@
     <Reference Include="System.Xml.Linq" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="CertificatePinnerFactory.cs" />
     <Compile Include="Duo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="ca_certs.pem" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSHARP.Targets" />

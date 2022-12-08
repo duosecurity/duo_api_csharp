@@ -53,4 +53,4 @@ jobs:
         run: msbuild.exe duo_api_csharp.sln
 
       - name: Run Tests dll
-        run: vstest.console.exe .\test\bin\Debug\test.dll
+        run: vstest.console.exe .\test\bin\Debug\DuoApiTest.dll
