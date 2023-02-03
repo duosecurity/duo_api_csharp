@@ -12,6 +12,12 @@ For more information see our Duo for Developers page:
 
 <https://www.duosecurity.com/api>
 
+## TLS 1.2 and 1.3 Support
+
+Duo_api_csharp uses the .NET libraries for TLS operations.  .NET 4.7 or later is required for TLS 1.2; .NET 4.8 or later is required for TLS 1.3.
+
+In addition, version 1.0.0 of duo_api_csharp is required, since prior versions targeted .NET 4.5 which does not support TLS 1.2 or 1.3.
+
 # Installing
 A Windows machine is required to run and test duo_api_csharp.
 
