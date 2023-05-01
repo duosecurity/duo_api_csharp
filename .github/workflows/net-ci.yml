@@ -11,6 +11,7 @@ on:
 jobs:
 # Build and test on .NET Core
   dotnet-core-ci:
+    name: .NET Core - test
     runs-on: windows-2022
 
     steps:
@@ -35,6 +36,7 @@ jobs:
 
   # Build and test on .NET Framework
   dotnet-framework-ci:
+    name: .NET Framework - test
     runs-on: windows-2022
 
     steps:
