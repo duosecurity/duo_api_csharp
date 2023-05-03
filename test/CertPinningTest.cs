@@ -22,6 +22,8 @@ public class CertPinningTestBase
     {
         // The certificate chain for api-*.duosecurity.com
         var chain = new X509Chain();
+        // Verify as of a date that the certs are valid for
+        chain.ChainPolicy.VerificationTime = new DateTime(2023, 01, 01);
         chain.ChainPolicy.ExtraStore.Add(CertFromString(DUO_API_CERT_ROOT));
         chain.ChainPolicy.ExtraStore.Add(CertFromString(DUO_API_CERT_INTER));
         bool valid = chain.Build(DuoApiServerCert());
@@ -33,6 +35,8 @@ public class CertPinningTestBase
     {
         // A valid chain, but for www.microsoft.com, not Duo
         var chain = new X509Chain();
+        // Verify as of a date that the certs are valid for
+        chain.ChainPolicy.VerificationTime = new DateTime(2023, 01, 01);
         chain.ChainPolicy.ExtraStore.Add(CertFromString(MICROSOFT_COM_CERT_ROOT));
         chain.ChainPolicy.ExtraStore.Add(CertFromString(MICROSOFT_COM_CERT_INTER));
         bool valid = chain.Build(CertFromString(MICROSOFT_COM_CERT_SERVER));
