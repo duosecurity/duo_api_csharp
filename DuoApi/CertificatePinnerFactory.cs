@@ -130,7 +130,7 @@ namespace Duo
         internal static string[] ReadCertsFromFile()
         {
             var certs = "";
-            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("duo_api_csharp.ca_certs.pem"))
+            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"{Assembly.GetExecutingAssembly().GetName().Name}.ca_certs.pem"))
             using (StreamReader reader = new StreamReader(stream))
             {
                 certs = reader.ReadToEnd();

@@ -23,8 +23,7 @@ public class Program
         var r = client.JSONApiCall<Dictionary<string, object>>(
             "GET", "/admin/v1/info/authentication_attempts", parameters);
         var attempts = r["authentication_attempts"] as Dictionary<string, object>;
-        foreach (KeyValuePair<string, object> info in attempts)
-        {
+        foreach (KeyValuePair<string, object> info in attempts) {
             var s = String.Format("{0} authentication(s) ended with {1}.",
                                   info.Value,
                                   info.Key);
@@ -35,28 +34,23 @@ public class Program
         var users = client.JSONApiCall<System.Collections.ArrayList>(
             "GET", "/admin/v1/users", parameters);
         System.Console.WriteLine(String.Format("{0} users.", users.Count));
-        foreach (Dictionary<string, object> user in users)
-        {
+        foreach (Dictionary<string, object> user in users) {
             System.Console.WriteLine(
                 "\t" + "Username: " + (user["username"] as string));
         }
 
         // paging call
         int? offset = 0;
-        while (offset != null)
-        {
-            var jsonResponse = client.JSONPagingApiCall("GET", "/admin/v1/users", parameters, (int)offset, 10);
-            var pagedUsers = jsonResponse["response"] as System.Collections.ArrayList;
+        while (offset != null) {
+            var pagedUsers = client.JSONPagingApiCall<System.Collections.ArrayList>("GET", "/admin/v1/users", parameters, (int)offset, 10, out var metadata);
             System.Console.WriteLine(String.Format("{0} users at offset {1}", pagedUsers.Count, offset));
-            foreach (Dictionary<string, object> user in pagedUsers)
-            {
+            foreach (Dictionary<string, object> user in pagedUsers) {
                 System.Console.WriteLine(
                     "\t" + "Username: " + (user["username"] as string));
             }
-            var metadata = jsonResponse["metadata"] as Dictionary<string, object>;
-            if (metadata.ContainsKey("next_offset"))
+            if (metadata.next_offset.HasValue)
             {
-                offset = metadata["next_offset"] as int?;
+                offset = metadata.next_offset.Value;
             }
             else
             {
