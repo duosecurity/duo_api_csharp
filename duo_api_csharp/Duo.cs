@@ -11,14 +11,14 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Text;
-using System.Web.Script.Serialization;
 using System.Web;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Net.Security;
-
+using System.Text.Json;
+using DuoApiCsharp.Extensions;
 
 namespace Duo
 {
@@ -386,11 +386,9 @@ namespace Duo
             HttpStatusCode statusCode;
             string res = this.ApiCall(method, path, parameters, timeout, date, out statusCode);
 
-            var jss = new JavaScriptSerializer();
-
             try
             {
-                var dict = jss.Deserialize<Dictionary<string, object>>(res);
+                var dict = DeserializeJsonToMixedDictionary(res);
                 if (dict["stat"] as string == "OK")
                 {
                     return dict;
@@ -426,6 +424,18 @@ namespace Duo
             {
                 throw new BadResponseException((int)statusCode, e);
             }
+        }
+
+        private Dictionary<string, object> DeserializeJsonToMixedDictionary(string json)
+        {
+            var sourceDict = JsonSerializer.Deserialize
+                <Dictionary<string, JsonElement>>(json);
+            var targetDict = new Dictionary<string, object>();
+            foreach (var kvp in sourceDict)
+            {
+                targetDict.Add(kvp.Key, kvp.Value.ConvertToObject());
+            }
+            return targetDict;
         }
 
         public T JSONApiCall<T>(string method,
