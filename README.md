@@ -37,7 +37,17 @@ $ cd duo_api_csharp
 5. Open the Test Explorer window (Test > Test Explorer).
 6. Run the unit tests by selecting on the top test and hitting the Run All button. There should be about 25 tests.
 Visit Microsoft's ["Get started with unit testing page"](https://learn.microsoft.com/en-us/visualstudio/test/getting-started-with-unit-testing?view=vs-2022&tabs=dotnet%2Cmstest) for more information and help.
- 
+
+# Running the examples project
+
+The example project (`examples/Examples.csproj`) connects to an Admin API instance and fetches some data to display to the command line. To run it, create a Duo Admin API instance following [these instructions](https://duo.com/docs/adminapi), making sure to enable Read permissions. Then, after building the example, you can invoke it using the command below, replacing the integration key, secret, and api hostname with the values for your API instance:
+
+```
+.\examples\bin\Debug\Examples.exe <IntegrationKey> <SecretKey> <API Hostname>
+```
+
+If successful, the command will output a summary of authentications performed against your account.
+
 # Support
 
 Report any bugs, feature requests, etc. to us directly:

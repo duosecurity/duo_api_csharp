@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text.Json;
 
@@ -48,7 +49,8 @@ namespace DuoApiCsharp.Extensions
                     }
                     return targetDict;
                 case JsonValueKind.Array:
-                    var list = new List<object>();
+                    // ArrayList was returned by the older serializer, so make sure to keep the type
+                    var list = new ArrayList();
                     foreach (var item in element.EnumerateArray())
                     {
                         list.Add(item.ConvertToObject());
