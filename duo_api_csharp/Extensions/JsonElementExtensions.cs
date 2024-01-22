@@ -3,8 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text.Json;
 
-namespace DuoApiCsharp.Extensions
-{
+namespace Duo.Extensions
+{ 
     internal static class JsonElementExtensions
     {
         /// <summary>
