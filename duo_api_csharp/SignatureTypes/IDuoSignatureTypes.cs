@@ -3,13 +3,16 @@
  * All rights reserved
  * https://github.com/duosecurity/duo_api_csharp
  */
- 
+
+using duo_api_csharp.Models;
+
 namespace duo_api_csharp.SignatureTypes
 {
     public enum DuoSignatureTypes
     {
-        Duo_SignatureTypeV4 = 1,
-        Duo_SignatureTypeV5 = 2
+        Duo_SignatureTypeV2 = 2,
+        Duo_SignatureTypeV4 = 4,
+        Duo_SignatureTypeV5 = 5
     }
     
     public interface IDuoSignatureTypes
@@ -29,10 +32,10 @@ namespace duo_api_csharp.SignatureTypes
         /// </summary>
         /// <param name="method">HTTP Method</param>
         /// <param name="path">Path to endpoint</param>
-        /// <param name="requestData">Request data</param>
-        /// <param name="requestDate">Request date</param>
+        /// <param name="requestDate">Request date for X-Duo-Date header</param>
+        /// <param name="requestData">Data being sent to the server</param>
         /// <param name="requestHeaders">Request headers</param>
         /// <returns>Signed bearer token</returns>
-        public string SignRequest(HttpMethod method, string path, Dictionary<string,string>? requestData, DateTime requestDate, Dictionary<string, string> requestHeaders);
+        public string SignRequest(HttpMethod method, string path, DateTime requestDate, DuoRequestData? requestData, Dictionary<string, string>? requestHeaders);
     }
 }

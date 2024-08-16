@@ -4,7 +4,6 @@
  * https://github.com/duosecurity/duo_api_csharp
  */
 
-using System.Web;
 using System.Text;
 using duo_api_csharp.Models;
 using duo_api_csharp.Extensions;
@@ -12,41 +11,34 @@ using System.Security.Cryptography;
 
 namespace duo_api_csharp.SignatureTypes
 {
-    public class DuoSignatureV4(string ikey, string skey, string host, DateTime requesttime) : IDuoSignatureTypes
+    public class DuoSignatureV2(string ikey, string skey, string host, DateTime requesttime) : IDuoSignatureTypes
     {
-        public DuoSignatureTypes SignatureType => DuoSignatureTypes.Duo_SignatureTypeV4;
+        public DuoSignatureTypes SignatureType => DuoSignatureTypes.Duo_SignatureTypeV2;
         public Dictionary<string, string> DefaultRequestHeaders => new()
         {
             { "X-Duo-Date", requesttime.DateToRFC822() }
         };
 
-        public string SignRequest(HttpMethod method, string path, DateTime requestDate, DuoRequestData? requestData, Dictionary<string, string>? requestHeaders)
+        public string SignRequest(HttpMethod method, string path, DateTime requestDate, DuoRequestData? requestData, Dictionary<string, string>? _)
         {
             // Format data for signature
             var signingHeader = $"{requestDate.DateToRFC822()}\n{method.Method.ToUpper()}\n{host}\n{path}";
             var signingParams = new StringBuilder();
-            var bodyData = "";
-            
-            // Check request data for signing
-            if( requestData is DuoParamRequestData paramData )
+            if( requestData is DuoParamRequestData data )
             {
-                foreach( var (paramKey, paramValue) in paramData.RequestData )
+                foreach( var (paramKey, paramValue) in data.RequestData.OrderBy(q => q.Key) )
                 {
                     if( signingParams.Length != 0 ) signingParams.Append('&');
-                    signingParams.Append($"{HttpUtility.UrlEncode(paramKey)}={HttpUtility.UrlEncode(paramValue)}");
+                    signingParams.Append($"{Uri.EscapeDataString(paramKey)}={Uri.EscapeDataString(paramValue)}");
                 }
-            }
-            else if( requestData is DuoJsonRequestData jsonData )
-            {
-                bodyData = jsonData.RequestData;
             }
             
             //Console.WriteLine($"---------");
-            //Console.WriteLine($"{signingHeader}\n{signingParams}\n{_Sha512Hash(bodyData)}\n{_Sha512Hash(signingHeaders.ToString())}");
-            //Console.WriteLine($"---------\n{signingHeaders}");
+            //Console.WriteLine($"{signingHeader}\n{signingParams}");
+            //Console.WriteLine($"---------");
 
             // Return HMAC signature for request
-            var auth = $"{ikey}:{_HmacSign($"{signingHeader}\n{signingParams}\n{_Sha512Hash(bodyData)}")}";
+            var auth = $"{ikey}:{_HmacSign($"{signingHeader}\n{signingParams}")}";
             return _Encode64(auth);
         }
         
@@ -60,14 +52,6 @@ namespace duo_api_csharp.SignatureTypes
             if( hmac.Hash == null ) return null;
 
             var hex = BitConverter.ToString(hmac.Hash);
-            return hex.Replace("-", "").ToLower();
-        }
-        
-        private string _Sha512Hash(string data)
-        {
-            var data_bytes = Encoding.UTF8.GetBytes(data);
-            var hash_data = SHA512.HashData(data_bytes);
-            var hex = BitConverter.ToString(hash_data);
             return hex.Replace("-", "").ToLower();
         }
 

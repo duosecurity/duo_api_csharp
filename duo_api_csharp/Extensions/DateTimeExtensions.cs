@@ -24,7 +24,7 @@ namespace duo_api_csharp.Extensions
             
             string zone;
             // + or -, then 0-pad, then offset, then more 0-padding.
-            if( offset < 0 )
+            if( offset <= 0 )
             {
                 offset *= -1;
                 zone = "-";

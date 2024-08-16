@@ -5,6 +5,8 @@
  */
 
 using System.Net;
+using System.Web;
+using System.Text;
 using System.Net.Security;
 using duo_api_csharp.Models;
 using duo_api_csharp.Classes;
@@ -21,12 +23,8 @@ namespace duo_api_csharp
     /// <param name="skey">Duo secret key</param>
     /// <param name="host">API URL to communicate with</param>
     /// <param name="user_agent">Useragent to send to the API</param>
-    public class DuoAPI(string ikey, string skey, string host, string user_agent = "DuoAPICSharp/2.0")
+    public class DuoAPI(string ikey, string skey, string host, string user_agent = "Duo API CSharp/2.0")
     {
-        private const int INITIAL_BACKOFF_MS = 1000;
-        private const int MAX_BACKOFF_MS = 32000;
-        private const int BACKOFF_FACTOR = 2;
-        private const int RATE_LIMIT_HTTP_CODE = 429;
         private bool _TLSCertificateValidation = true;
 
         #region Public Properties
@@ -78,7 +76,7 @@ namespace duo_api_csharp
         /// <param name="signatureType">The type of signature to use to sign the request</param>
         /// <returns>Response model indicating status code and response data, if any</returns>
         /// <exception name="DuoException">Exception on unexpected error that could not be returned as part of the response model</exception>
-        public DuoAPIResponse APICall(HttpMethod method, string path, Dictionary<string, string>? parameters = null, DateTime? date = null, DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV4)
+        public DuoAPIResponse APICall(HttpMethod method, string path, DuoRequestData? parameters = null, DateTime? date = null, DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV5)
         {
             // Get request date
             var requestDate = date ?? DateTime.UtcNow;
@@ -92,14 +90,27 @@ namespace duo_api_csharp
 
             // Check signature
             IDuoSignatureTypes DuoSignature;
-            if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV4 ) DuoSignature = new DuoSignatureV4(ikey, skey, host, requestDate);
+            if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV2 ) DuoSignature = new DuoSignatureV2(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV4 ) DuoSignature = new DuoSignatureV4(ikey, skey, host, requestDate);
             else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV5 ) DuoSignature = new DuoSignatureV5(ikey, skey, host, requestDate);
             else throw new DuoException("Invalid or unsupported signature type");
             
+            // Except for POST,PUT and PATCH, put parameters in the URL
+            if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && parameters is DuoParamRequestData paramData )
+            {
+                var queryBuilder = new StringBuilder();
+                foreach( var (paramKey, paramValue) in paramData.RequestData )
+                {
+                    if( queryBuilder.Length != 0 ) queryBuilder.Append('&');
+                    queryBuilder.Append($"{HttpUtility.UrlEncode(paramKey)}={HttpUtility.UrlEncode(paramValue)}");
+                }
+                serverRequestUri.Query = queryBuilder.ToString();
+            }
+            
             // Get request auth and send
             var requestHeaders = DuoSignature.DefaultRequestHeaders;
-            var requestAuthentication = DuoSignature.SignRequest(method, path, parameters, requestDate, requestHeaders);
-            var clientResponse = _SendHTTPRequest(method, serverRequestUri.Uri, requestAuthentication, parameters, requestHeaders);
+            var requestAuthentication = DuoSignature.SignRequest(method, path, requestDate, parameters, requestHeaders);
+            var clientResponse = _SendHTTPRequest(method, serverRequestUri.Uri, requestAuthentication, signatureType, parameters, requestHeaders);
             var responseObject = new DuoAPIResponse
             {
                 RequestSuccess = clientResponse.IsSuccessStatusCode,
@@ -129,7 +140,7 @@ namespace duo_api_csharp
         /// <param name="signatureType">The type of signature to use to sign the request</param>
         /// <returns>Response model indicating status code and response data, if any</returns>
         /// <exception name="DuoException">Exception on unexpected error that could not be returned as part of the response model</exception>
-        public async Task<DuoAPIResponse> APICallAsync(HttpMethod method, string path, Dictionary<string, string>? parameters = null, DateTime? date = null, DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV4)
+        public async Task<DuoAPIResponse> APICallAsync(HttpMethod method, string path, DuoRequestData? parameters = null, DateTime? date = null, DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV5)
         {
             // Get request date
             var requestDate = date ?? DateTime.UtcNow;
@@ -143,14 +154,27 @@ namespace duo_api_csharp
             
             // Check signature
             IDuoSignatureTypes DuoSignature;
-            if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV4 ) DuoSignature = new DuoSignatureV4(ikey, skey, host, requestDate);
+            if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV2 ) DuoSignature = new DuoSignatureV2(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV4 ) DuoSignature = new DuoSignatureV4(ikey, skey, host, requestDate);
             else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV5 ) DuoSignature = new DuoSignatureV5(ikey, skey, host, requestDate);
             else throw new DuoException("Invalid or unsupported signature type");
             
+            // Except for POST,PUT and PATCH, put parameters in the URL
+            if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && parameters is DuoParamRequestData paramData )
+            {
+                var queryBuilder = new StringBuilder();
+                foreach( var (paramKey, paramValue) in paramData.RequestData )
+                {
+                    if( queryBuilder.Length != 0 ) queryBuilder.Append('&');
+                    queryBuilder.Append($"{HttpUtility.UrlEncode(paramKey)}={HttpUtility.UrlEncode(paramValue)}");
+                }
+                serverRequestUri.Query = queryBuilder.ToString();
+            }
+            
             // Get request auth and send
             var requestHeaders = DuoSignature.DefaultRequestHeaders;
-            var requestAuthentication = DuoSignature.SignRequest(method, path, parameters, requestDate, requestHeaders);
-            var clientResponse = await _SendHTTPRequestAsync(method, serverRequestUri.Uri, requestAuthentication, parameters, requestHeaders);
+            var requestAuthentication = DuoSignature.SignRequest(method, path, requestDate, parameters, requestHeaders);
+            var clientResponse = await _SendHTTPRequestAsync(method, serverRequestUri.Uri, requestAuthentication, signatureType, parameters, requestHeaders);
             var responseObject = new DuoAPIResponse
             {
                 RequestSuccess = clientResponse.IsSuccessStatusCode,
@@ -174,12 +198,13 @@ namespace duo_api_csharp
         /// <param name="method">HTTP Request method</param>
         /// <param name="url">The URL, excluding the host</param>
         /// <param name="auth">The generated bearer auth token</param>
-        /// <param name="requestData">Request data, mandatory for PUT and POST methods</param>
-        /// <param name="duoHeaders">Any additional X-Duo headers required for the request</param>
+        /// <param name="signatureType">The type of signature to use to sign the request</param>
+        /// <param name="bodyRequestData">Request data to be placed in the request body</param>
+        /// <param name="duoHeaders">Any additional headers to send with the request</param>
         /// <returns>HttpResponseMessage</returns>
         /// <exception cref="DuoException">If no data is provided for PUT or POST methods</exception>
         /// <exception cref="HttpRequestException">Error on HttpRequest from dotnet</exception>
-        private HttpResponseMessage _SendHTTPRequest(HttpMethod method, Uri url, string auth, Dictionary<string, string>? requestData = null, Dictionary<string, string>? duoHeaders = null)
+        private HttpResponseMessage _SendHTTPRequest(HttpMethod method, Uri url, string auth, DuoSignatureTypes signatureType, DuoRequestData? bodyRequestData = null, Dictionary<string, string>? duoHeaders = null)
         {
             // Setup the HttpClient. There is no reason to permit anything other than TLS1.2 and 1.3 as the API endpoints don't accept it
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13 | SecurityProtocolType.Tls12;
@@ -191,10 +216,9 @@ namespace duo_api_csharp
             // Setup the request headers
             WebRequest.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", auth);
             WebRequest.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            WebRequest.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             WebRequest.DefaultRequestHeaders.UserAgent.ParseAdd(_FormatUserAgent(user_agent));
             WebRequest.Timeout = RequestTimeout ?? WebRequest.Timeout;
-            
+
             // Add additional headers
             if( duoHeaders != null )
             {
@@ -212,12 +236,35 @@ namespace duo_api_csharp
             };
             
             // Handle request data
-            if( method == HttpMethod.Post || method == HttpMethod.Put )
+            if( method == HttpMethod.Post || method == HttpMethod.Put || method == HttpMethod.Patch )
             {
-                if( requestData == null ) throw new DuoException("PUT or POST method specified but no request data");
-                requestMessage.Content = new FormUrlEncodedContent(requestData);
+                if( signatureType is DuoSignatureTypes.Duo_SignatureTypeV4 or DuoSignatureTypes.Duo_SignatureTypeV5 )
+                {
+                    // requestData is JSON in the request body for Signature 4 and 5
+                    if( bodyRequestData is DuoJsonRequestData jsonData && !string.IsNullOrEmpty(jsonData.RequestData) )
+                    {
+                        requestMessage.Content = new StringContent(jsonData.RequestData, Encoding.UTF8, jsonData.ContentTypeHeader);
+                    }
+                    else
+                    {
+                        throw new DuoException($"{method} specified but either DuoJsonRequestData was not provided or DuoJsonRequestData.RequestData was null or empty (And signaturetype was >=4)");
+                    }
+                }
+                else
+                {
+                    // requestData is FormUrl encoded in the request body for Signature 2
+                    if( bodyRequestData is DuoParamRequestData paramData )
+                    {
+                        requestMessage.Content = new FormUrlEncodedContent(paramData.RequestData);
+                    }
+                    else
+                    {
+                        throw new DuoException($"{method} specified but either DuoParamRequestData was not provided or DuoParamRequestData.RequestData was null (And signaturetype was <4)");
+                    }
+                }
             }
-
+            
+            // Make request and send response back to parent
             return WebRequest.Send(requestMessage);
         }
         
@@ -227,12 +274,13 @@ namespace duo_api_csharp
         /// <param name="method">HTTP Request method</param>
         /// <param name="url">The URL, excluding the host</param>
         /// <param name="auth">The generated bearer auth token</param>
-        /// <param name="requestData">Request data, mandatory for PUT and POST methods</param>
-        /// <param name="duoHeaders">Any additional X-Duo headers required for the request</param>
+        /// <param name="signatureType">The type of signature to use to sign the request</param>
+        /// <param name="bodyRequestData">Request data to be placed in the request body</param>
+        /// <param name="duoHeaders">Any additional headers to send with the request</param>
         /// <returns>HttpResponseMessage</returns>
         /// <exception cref="DuoException">If no data is provided for PUT or POST methods</exception>
         /// <exception cref="HttpRequestException">Error on HttpRequest from dotnet</exception>
-        private async Task<HttpResponseMessage> _SendHTTPRequestAsync(HttpMethod method, Uri url, string auth, Dictionary<string, string>? requestData = null, Dictionary<string, string>? duoHeaders = null)
+        private async Task<HttpResponseMessage> _SendHTTPRequestAsync(HttpMethod method, Uri url, string auth, DuoSignatureTypes signatureType, DuoRequestData? bodyRequestData = null, Dictionary<string, string>? duoHeaders = null)
         {
             // Setup the HttpClient. There is no reason to permit anything other than TLS1.2 and 1.3 as the API endpoints don't accept it
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13 | SecurityProtocolType.Tls12;
@@ -243,7 +291,6 @@ namespace duo_api_csharp
             
             // Setup the request headers
             WebRequest.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", auth);
-            WebRequest.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             WebRequest.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             WebRequest.DefaultRequestHeaders.UserAgent.ParseAdd(_FormatUserAgent(user_agent));
             WebRequest.Timeout = RequestTimeout ?? WebRequest.Timeout;
@@ -265,12 +312,35 @@ namespace duo_api_csharp
             };
             
             // Handle request data
-            if( method == HttpMethod.Post || method == HttpMethod.Put )
+            if( method == HttpMethod.Post || method == HttpMethod.Put || method == HttpMethod.Patch )
             {
-                if( requestData == null ) throw new DuoException("PUT or POST method specified but no request data");
-                requestMessage.Content = new FormUrlEncodedContent(requestData);
+                if( signatureType is DuoSignatureTypes.Duo_SignatureTypeV4 or DuoSignatureTypes.Duo_SignatureTypeV5 )
+                {
+                    // requestData is JSON in the request body for Signature 4 and 5
+                    if( bodyRequestData is DuoJsonRequestData jsonData && !string.IsNullOrEmpty(jsonData.RequestData) )
+                    {
+                        requestMessage.Content = new StringContent(jsonData.RequestData, Encoding.UTF8, jsonData.ContentTypeHeader);
+                    }
+                    else
+                    {
+                        throw new DuoException($"{method} specified but either DuoJsonRequestData was not provided or DuoJsonRequestData.RequestData was null or empty (And signaturetype was >=4)");
+                    }
+                }
+                else
+                {
+                    // requestData is FormUrl encoded in the request body for Signature 2
+                    if( bodyRequestData is DuoParamRequestData paramData )
+                    {
+                        requestMessage.Content = new FormUrlEncodedContent(paramData.RequestData);
+                    }
+                    else
+                    {
+                        throw new DuoException($"{method} specified but either DuoParamRequestData was not provided or DuoParamRequestData.RequestData was null (And signaturetype was <4)");
+                    }
+                }
             }
 
+            // Make request and send response back to parent
             return await WebRequest.SendAsync(requestMessage);
         }
 
