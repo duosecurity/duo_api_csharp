@@ -1,9 +1,13 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
+﻿/*
+ * Copyright (c) 2022-2024 Cisco Systems, Inc. and/or its affiliates
+ * All rights reserved
+ * https://github.com/duosecurity/duo_api_csharp
+ */
+ 
 using System.Text.Json;
+using System.Collections;
 
-namespace Duo.Extensions
+namespace duo_api_csharp.Extensions
 { 
     internal static class JsonElementExtensions
     {
@@ -14,7 +18,7 @@ namespace Duo.Extensions
         /// <param name="element"></param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        internal static object ConvertToObject(this JsonElement element)
+        internal static object? ConvertToObject(this JsonElement element)
         {
             switch (element.ValueKind)
             {
@@ -43,9 +47,11 @@ namespace Duo.Extensions
                 case JsonValueKind.Object:
                     var sourceDict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(element.GetRawText());
                     var targetDict = new Dictionary<string, object>();
+                    if( sourceDict == null ) return null;
                     foreach (var kvp in sourceDict)
                     {
-                        targetDict.Add(kvp.Key, kvp.Value.ConvertToObject());
+                        var convertedValue = kvp.Value.ConvertToObject();
+                        if( convertedValue != null ) targetDict.Add(kvp.Key, convertedValue);
                     }
                     return targetDict;
                 case JsonValueKind.Array:

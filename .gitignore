@@ -13,3 +13,4 @@ packages/
 
 *.ncrunchsolution
 _NCrunch_*/
+.idea
