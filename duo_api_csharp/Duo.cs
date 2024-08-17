@@ -7,6 +7,7 @@
 using System.Net;
 using System.Web;
 using System.Text;
+using Newtonsoft.Json;
 using System.Net.Security;
 using duo_api_csharp.Models;
 using duo_api_csharp.Classes;
@@ -64,11 +65,12 @@ namespace duo_api_csharp
         
         #region Public Methods
         /// <summary>
-        /// Perform a Duo API call
+        /// Perform a Duo API call, disregarding response data other than success state
+        /// To return response data, specify a model to deserialise the response into with T
         /// </summary>
         /// <param name="method">HTTP Method to </param>
         /// <param name="path">The API path, excluding the host</param>
-        /// <param name="parameters">Parameters that make up the request</param>
+        /// <param name="param">Parameters that make up the request</param>
         /// <param name="date">The current date and time, used to authenticate
         /// the API request. Typically, you should specify DateTime.UtcNow,
         /// but if you do not wish to rely on the system-wide clock, you may
@@ -76,7 +78,12 @@ namespace duo_api_csharp
         /// <param name="signatureType">The type of signature to use to sign the request</param>
         /// <returns>Response model indicating status code and response data, if any</returns>
         /// <exception name="DuoException">Exception on unexpected error that could not be returned as part of the response model</exception>
-        public DuoAPIResponse APICall(HttpMethod method, string path, DuoRequestData? parameters = null, DateTime? date = null, DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV5)
+        public DuoAPIResponse APICall(
+                HttpMethod method, 
+                string path, 
+                DuoRequestData? param = null, 
+                DateTime? date = null, 
+                DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV5)
         {
             // Get request date
             var requestDate = date ?? DateTime.UtcNow;
@@ -96,7 +103,7 @@ namespace duo_api_csharp
             else throw new DuoException("Invalid or unsupported signature type");
             
             // Except for POST,PUT and PATCH, put parameters in the URL
-            if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && parameters is DuoParamRequestData paramData )
+            if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && param is DuoParamRequestData paramData )
             {
                 var queryBuilder = new StringBuilder();
                 foreach( var (paramKey, paramValue) in paramData.RequestData )
@@ -109,8 +116,8 @@ namespace duo_api_csharp
             
             // Get request auth and send
             var requestHeaders = DuoSignature.DefaultRequestHeaders;
-            var requestAuthentication = DuoSignature.SignRequest(method, path, requestDate, parameters, requestHeaders);
-            var clientResponse = _SendHTTPRequest(method, serverRequestUri.Uri, requestAuthentication, signatureType, parameters, requestHeaders);
+            var requestAuthentication = DuoSignature.SignRequest(method, path, requestDate, param, requestHeaders);
+            var clientResponse = _SendHTTPRequest(method, serverRequestUri.Uri, requestAuthentication, signatureType, param, requestHeaders);
             var responseObject = new DuoAPIResponse
             {
                 RequestSuccess = clientResponse.IsSuccessStatusCode,
@@ -121,18 +128,19 @@ namespace duo_api_csharp
             try
             {
                 using var reader = new StreamReader(clientResponse.Content.ReadAsStream());
-                responseObject.ResponseData = reader.ReadToEnd();
+                responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel>(reader.ReadToEnd());
             }
             catch( Exception ) {}
             return responseObject;
         }
         
         /// <summary>
-        /// Perform a Duo API call
+        /// Perform a Duo API call, disregarding response data other than success state
+        /// To return response data, specify a model to deserialise the response into with T
         /// </summary>
         /// <param name="method">HTTP Method to </param>
         /// <param name="path">The API path, excluding the host</param>
-        /// <param name="parameters">Parameters that make up the request</param>
+        /// <param name="param">Parameters that make up the request</param>
         /// <param name="date">The current date and time, used to authenticate
         /// the API request. Typically, you should specify DateTime.UtcNow,
         /// but if you do not wish to rely on the system-wide clock, you may
@@ -140,7 +148,12 @@ namespace duo_api_csharp
         /// <param name="signatureType">The type of signature to use to sign the request</param>
         /// <returns>Response model indicating status code and response data, if any</returns>
         /// <exception name="DuoException">Exception on unexpected error that could not be returned as part of the response model</exception>
-        public async Task<DuoAPIResponse> APICallAsync(HttpMethod method, string path, DuoRequestData? parameters = null, DateTime? date = null, DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV5)
+        public async Task<DuoAPIResponse> APICallAsync(
+                HttpMethod method, 
+                string path, 
+                DuoRequestData? param = null, 
+                DateTime? date = null, 
+                DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV5)
         {
             // Get request date
             var requestDate = date ?? DateTime.UtcNow;
@@ -151,7 +164,7 @@ namespace duo_api_csharp
                 Path = path,
                 Port = -1
             };
-            
+
             // Check signature
             IDuoSignatureTypes DuoSignature;
             if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV2 ) DuoSignature = new DuoSignatureV2(ikey, skey, host, requestDate);
@@ -160,7 +173,7 @@ namespace duo_api_csharp
             else throw new DuoException("Invalid or unsupported signature type");
             
             // Except for POST,PUT and PATCH, put parameters in the URL
-            if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && parameters is DuoParamRequestData paramData )
+            if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && param is DuoParamRequestData paramData )
             {
                 var queryBuilder = new StringBuilder();
                 foreach( var (paramKey, paramValue) in paramData.RequestData )
@@ -173,8 +186,8 @@ namespace duo_api_csharp
             
             // Get request auth and send
             var requestHeaders = DuoSignature.DefaultRequestHeaders;
-            var requestAuthentication = DuoSignature.SignRequest(method, path, requestDate, parameters, requestHeaders);
-            var clientResponse = await _SendHTTPRequestAsync(method, serverRequestUri.Uri, requestAuthentication, signatureType, parameters, requestHeaders);
+            var requestAuthentication = DuoSignature.SignRequest(method, path, requestDate, param, requestHeaders);
+            var clientResponse = await _SendHTTPRequestAsync(method, serverRequestUri.Uri, requestAuthentication, signatureType, param, requestHeaders);
             var responseObject = new DuoAPIResponse
             {
                 RequestSuccess = clientResponse.IsSuccessStatusCode,
@@ -184,7 +197,146 @@ namespace duo_api_csharp
             // Try to read data from response
             try
             {
-                responseObject.ResponseData = await clientResponse.Content.ReadAsStringAsync();
+                responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel>(await clientResponse.Content.ReadAsStringAsync());
+            }
+            catch( Exception ) {}
+            return responseObject;
+        }
+        
+        /// <summary>
+        /// Perform a Duo API call, disregarding response data other than success state
+        /// To return response data, specify a model to deserialise the response into with T
+        /// </summary>
+        /// <param name="method">HTTP Method to </param>
+        /// <param name="path">The API path, excluding the host</param>
+        /// <param name="param">Parameters that make up the request</param>
+        /// <param name="date">The current date and time, used to authenticate
+        /// the API request. Typically, you should specify DateTime.UtcNow,
+        /// but if you do not wish to rely on the system-wide clock, you may
+        /// determine the current date/time by some other means.</param>
+        /// <param name="signatureType">The type of signature to use to sign the request</param>
+        /// <returns>Response model indicating status code and response data, if any</returns>
+        /// <exception name="DuoException">Exception on unexpected error that could not be returned as part of the response model</exception>
+        public DuoAPIResponse<T> APICall<T>(
+                HttpMethod method, 
+                string path, 
+                DuoRequestData? param = null, 
+                DateTime? date = null, 
+                DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV5)
+        {
+            // Get request date
+            var requestDate = date ?? DateTime.UtcNow;
+            var serverRequestUri = new UriBuilder
+            {
+                Scheme = "https",
+                Host = host,
+                Path = path,
+                Port = -1
+            };
+
+            // Check signature
+            IDuoSignatureTypes DuoSignature;
+            if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV2 ) DuoSignature = new DuoSignatureV2(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV4 ) DuoSignature = new DuoSignatureV4(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV5 ) DuoSignature = new DuoSignatureV5(ikey, skey, host, requestDate);
+            else throw new DuoException("Invalid or unsupported signature type");
+            
+            // Except for POST,PUT and PATCH, put parameters in the URL
+            if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && param is DuoParamRequestData paramData )
+            {
+                var queryBuilder = new StringBuilder();
+                foreach( var (paramKey, paramValue) in paramData.RequestData )
+                {
+                    if( queryBuilder.Length != 0 ) queryBuilder.Append('&');
+                    queryBuilder.Append($"{HttpUtility.UrlEncode(paramKey)}={HttpUtility.UrlEncode(paramValue)}");
+                }
+                serverRequestUri.Query = queryBuilder.ToString();
+            }
+            
+            // Get request auth and send
+            var requestHeaders = DuoSignature.DefaultRequestHeaders;
+            var requestAuthentication = DuoSignature.SignRequest(method, path, requestDate, param, requestHeaders);
+            var clientResponse = _SendHTTPRequest(method, serverRequestUri.Uri, requestAuthentication, signatureType, param, requestHeaders);
+            var responseObject = new DuoAPIResponse<T>
+            {
+                RequestSuccess = clientResponse.IsSuccessStatusCode,
+                StatusCode = clientResponse.StatusCode
+            };
+            
+            // Try to read data from response
+            try
+            {
+                using var reader = new StreamReader(clientResponse.Content.ReadAsStream());
+                responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel<T>>(reader.ReadToEnd());
+            }
+            catch( Exception ) {}
+            return responseObject;
+        }
+        
+        /// <summary>
+        /// Perform a Duo API call, disregarding response data other than success state
+        /// To return response data, specify a model to deserialise the response into with T
+        /// </summary>
+        /// <param name="method">HTTP Method to </param>
+        /// <param name="path">The API path, excluding the host</param>
+        /// <param name="param">Parameters that make up the request</param>
+        /// <param name="date">The current date and time, used to authenticate
+        /// the API request. Typically, you should specify DateTime.UtcNow,
+        /// but if you do not wish to rely on the system-wide clock, you may
+        /// determine the current date/time by some other means.</param>
+        /// <param name="signatureType">The type of signature to use to sign the request</param>
+        /// <returns>Response model indicating status code and response data, if any</returns>
+        /// <exception name="DuoException">Exception on unexpected error that could not be returned as part of the response model</exception>
+        public async Task<DuoAPIResponse<T>> APICallAsync<T>(
+                HttpMethod method, 
+                string path, 
+                DuoRequestData? param = null, 
+                DateTime? date = null, 
+                DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV5)
+        {
+            // Get request date
+            var requestDate = date ?? DateTime.UtcNow;
+            var serverRequestUri = new UriBuilder
+            {
+                Scheme = "https",
+                Host = host,
+                Path = path,
+                Port = -1
+            };
+
+            // Check signature
+            IDuoSignatureTypes DuoSignature;
+            if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV2 ) DuoSignature = new DuoSignatureV2(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV4 ) DuoSignature = new DuoSignatureV4(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV5 ) DuoSignature = new DuoSignatureV5(ikey, skey, host, requestDate);
+            else throw new DuoException("Invalid or unsupported signature type");
+            
+            // Except for POST,PUT and PATCH, put parameters in the URL
+            if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && param is DuoParamRequestData paramData )
+            {
+                var queryBuilder = new StringBuilder();
+                foreach( var (paramKey, paramValue) in paramData.RequestData )
+                {
+                    if( queryBuilder.Length != 0 ) queryBuilder.Append('&');
+                    queryBuilder.Append($"{HttpUtility.UrlEncode(paramKey)}={HttpUtility.UrlEncode(paramValue)}");
+                }
+                serverRequestUri.Query = queryBuilder.ToString();
+            }
+            
+            // Get request auth and send
+            var requestHeaders = DuoSignature.DefaultRequestHeaders;
+            var requestAuthentication = DuoSignature.SignRequest(method, path, requestDate, param, requestHeaders);
+            var clientResponse = await _SendHTTPRequestAsync(method, serverRequestUri.Uri, requestAuthentication, signatureType, param, requestHeaders);
+            var responseObject = new DuoAPIResponse<T>
+            {
+                RequestSuccess = clientResponse.IsSuccessStatusCode,
+                StatusCode = clientResponse.StatusCode
+            };
+            
+            // Try to read data from response
+            try
+            {
+                responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel<T>>(await clientResponse.Content.ReadAsStringAsync());
             }
             catch( Exception ) {}
             return responseObject;
