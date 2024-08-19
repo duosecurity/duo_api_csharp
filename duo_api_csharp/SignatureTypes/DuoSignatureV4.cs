@@ -6,6 +6,7 @@
 
 using System.Web;
 using System.Text;
+using Newtonsoft.Json;
 using duo_api_csharp.Models;
 using duo_api_csharp.Extensions;
 using System.Security.Cryptography;
@@ -39,6 +40,15 @@ namespace duo_api_csharp.SignatureTypes
             else if( requestData is DuoJsonRequestData jsonData )
             {
                 bodyData = jsonData.RequestData;
+            }
+            else if( requestData is DuoJsonRequestDataObject { RequestData: not null } jsonDataWithObject )
+            {
+                var jsonFormattingSettings = new JsonSerializerSettings
+                {
+                    NullValueHandling = NullValueHandling.Ignore
+                };
+                
+                bodyData = JsonConvert.SerializeObject(jsonDataWithObject.RequestData, jsonFormattingSettings);
             }
             
             //Console.WriteLine($"---------");

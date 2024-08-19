@@ -143,6 +143,10 @@ namespace duo_api_csharp
                 }
                 serverRequestUri.Query = queryBuilder.ToString();
             }
+            else if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && param is DuoJsonRequestData )
+            {
+                throw new DuoException("DuoJsonRequestData provided and HttpMethod != Post|Put|Patch. This is unsupported!");
+            }
             
             // Get request auth and send
             var requestHeaders = DuoSignature.DefaultRequestHeaders;
@@ -213,6 +217,10 @@ namespace duo_api_csharp
                     queryBuilder.Append($"{HttpUtility.UrlEncode(paramKey)}={HttpUtility.UrlEncode(paramValue)}");
                 }
                 serverRequestUri.Query = queryBuilder.ToString();
+            }
+            else if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && param is DuoJsonRequestData )
+            {
+                throw new DuoException("DuoJsonRequestData provided and HttpMethod != Post|Put|Patch. This is unsupported!");
             }
             
             // Get request auth and send
@@ -429,6 +437,15 @@ namespace duo_api_csharp
                     {
                         requestMessage.Content = new StringContent(jsonData.RequestData, Encoding.UTF8, jsonData.ContentTypeHeader);
                     }
+                    else if( bodyRequestData is DuoJsonRequestDataObject { RequestData: not null } jsonDataWithObject )
+                    {
+                        var jsonFormattingSettings = new JsonSerializerSettings
+                        {
+                            NullValueHandling = NullValueHandling.Ignore
+                        };
+                        
+                        requestMessage.Content = new StringContent(JsonConvert.SerializeObject(jsonDataWithObject.RequestData, jsonFormattingSettings), Encoding.UTF8, jsonDataWithObject.ContentTypeHeader);
+                    }
                     else
                     {
                         throw new DuoException($"{method} specified but either DuoJsonRequestData was not provided or DuoJsonRequestData.RequestData was null or empty (And signaturetype was >=4)");
@@ -504,6 +521,15 @@ namespace duo_api_csharp
                     if( bodyRequestData is DuoJsonRequestData jsonData && !string.IsNullOrEmpty(jsonData.RequestData) )
                     {
                         requestMessage.Content = new StringContent(jsonData.RequestData, Encoding.UTF8, jsonData.ContentTypeHeader);
+                    }
+                    else if( bodyRequestData is DuoJsonRequestDataObject { RequestData: not null } jsonDataWithObject )
+                    {
+                        var jsonFormattingSettings = new JsonSerializerSettings
+                        {
+                            NullValueHandling = NullValueHandling.Ignore
+                        };
+                        
+                        requestMessage.Content = new StringContent(JsonConvert.SerializeObject(jsonDataWithObject.RequestData, jsonFormattingSettings), Encoding.UTF8, jsonDataWithObject.ContentTypeHeader);
                     }
                     else
                     {

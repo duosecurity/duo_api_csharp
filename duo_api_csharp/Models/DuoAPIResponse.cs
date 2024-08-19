@@ -5,7 +5,7 @@
  */
  
 using System.Net;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace duo_api_csharp.Models
 {
@@ -66,13 +66,13 @@ namespace duo_api_csharp.Models
         /// Response from the server on the request
         /// Known values are OK and FAIL
         /// </summary>
-        [JsonPropertyName("stat")]
+        [JsonProperty("stat")]
         public required string Status { get; set; }
         
         /// <summary>
         /// Metadata for the response from the server
         /// </summary>
-        [JsonPropertyName("metadata")]
+        [JsonProperty("metadata")]
         public DuoResponseMetadataModel? ResponseMetadata { get; set; }
         
         /// <summary>
@@ -80,20 +80,20 @@ namespace duo_api_csharp.Models
         /// First three digits indicate the HTTP response code, the second two indicate a more specific error
         /// EG, 40002 = 400, Bad Request; 02 = Invalid request parameters
         /// </summary>
-        [JsonPropertyName("code")]
-        public int? ErrorCode { get; set; } = null;
+        [JsonProperty("code")]
+        public int? ErrorCode { get; set; }
         
         /// <summary>
         /// In the case of an error, this will contain the description for the error code provided
         /// </summary>
-        [JsonPropertyName("message")]
-        public string? ErrorMessage { get; set; } = null;
+        [JsonProperty("message")]
+        public string? ErrorMessage { get; set; }
         
         /// <summary>
         /// In the case of an error, this will contain additional information, if available
         /// </summary>
-        [JsonPropertyName("message_detail")]
-        public string? ErrorMessageDetail { get; set; } = null;
+        [JsonProperty("message_detail")]
+        public string? ErrorMessageDetail { get; set; }
     }
     
     /// <summary>
@@ -105,8 +105,8 @@ namespace duo_api_csharp.Models
         /// <summary>
         /// The response data from the request
         /// </summary>
-        [JsonPropertyName("response")]
-        public required T Response { get; set; }
+        [JsonProperty("response")]
+        public T? Response { get; set; }
     }
     
     /// <summary>

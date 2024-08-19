@@ -24,4 +24,11 @@ namespace duo_api_csharp.Models
         
         public string RequestData { get; set; } = "";
     }
+    
+    public class DuoJsonRequestDataObject(object jsonObj) : DuoRequestData
+    {
+        public string ContentTypeHeader => "application/json";
+        
+        public object? RequestData { get; init; } = jsonObj;
+    }
 }
