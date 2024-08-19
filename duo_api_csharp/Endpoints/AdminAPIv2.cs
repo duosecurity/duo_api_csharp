@@ -4,6 +4,8 @@
  * https://github.com/duosecurity/duo_api_csharp
  */
  
+// ReSharper disable PartialTypeWithSinglePart
+// ReSharper disable NotAccessedField.Local
 namespace duo_api_csharp.Endpoints
 {
     /// <summary>

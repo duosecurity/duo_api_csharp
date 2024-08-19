@@ -14,7 +14,7 @@ namespace duo_api_csharp.Models.v1
 	/// Duo User request data
 	/// This represents read-write API response data that can also be used in an update request to the API
 	/// </summary>
-	public class DuoUserRequestModel
+	public class DuoUserRequestModel : DuoModelBase
 	{
 		/// <summary>
 		/// Unique ID of the user
@@ -27,12 +27,6 @@ namespace duo_api_csharp.Models.v1
 		/// </summary>
 		[JsonProperty("username")]
 		public string? Username { get; set; }
-		
-		/// <summary>
-		/// Map of the user's username alias(es). Up to eight aliases may exist.
-		/// </summary>
-		[JsonProperty("aliases")]
-		public Dictionary<string, string>? Aliases { get; set; }
 		
 		/// <summary>
 		/// The user's real name (or full name).
@@ -52,6 +46,7 @@ namespace duo_api_csharp.Models.v1
 		/// Only effective in the Universal Prompt.
 		/// </summary>
 		[JsonProperty("enable_auto_prompt")]
+		[JsonConverter(typeof(DuoBoolConverter))]
 		public bool? EnableAutoPrompt { get; set; }
 		
 		/// <summary>
@@ -80,6 +75,12 @@ namespace duo_api_csharp.Models.v1
 	/// </summary>
 	public class DuoUserResponseModel : DuoUserRequestModel
 	{
+		/// <summary>
+		/// Map of the user's username alias(es). Up to eight aliases may exist.
+		/// </summary>
+		[JsonProperty("aliases")]
+		public Dictionary<string, string>? Aliases { get; set; }
+		
 		[JsonProperty("created")]
 		private long? _CreatedOn { get; set; }
 		

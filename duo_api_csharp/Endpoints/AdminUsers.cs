@@ -4,6 +4,8 @@
  * https://github.com/duosecurity/duo_api_csharp
  */
 
+using Newtonsoft.Json;
+using duo_api_csharp.Models;
 using duo_api_csharp.Classes;
 using duo_api_csharp.Models.v1;
 
@@ -15,7 +17,7 @@ namespace duo_api_csharp.Endpoints
         /// Duo Admin API - Users
         /// https://duo.com/docs/adminapi#users
         /// </summary>
-        public AdminAPIv1_Users Users { get; init; } = new(duo_api);
+        public AdminAPIv1_Users Users { get; } = new(duo_api);
     }
     
     public sealed class AdminAPIv1_Users
@@ -25,6 +27,10 @@ namespace duo_api_csharp.Endpoints
         internal AdminAPIv1_Users(DuoAPI duo_api)
         {
             this.duo_api = duo_api;
+            JsonConvert.DefaultSettings = () => new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Ignore
+            };
         }
         #endregion Internal constructor
         
@@ -52,9 +58,50 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User response model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoUserResponseModel>> GetUsers(int limit = 100, int offset = 0, string[]? user_id_list = null, string[]? username_list = null)
+        public async Task<DuoResponseModel<IEnumerable<DuoUserResponseModel>>> GetUsers(int limit = 100, int offset = 0, string[]? user_id_list = null, string[]? username_list = null)
         {
-            throw new NotImplementedException();
+            // Check paging bounds
+            if( limit is > 300 or < 1 ) limit = 100;
+            if( offset < 1 ) offset = 0;
+            
+            // Request parameters
+            var requestParam = new DuoParamRequestData
+            {
+                RequestData = new Dictionary<string, string>
+                {
+                    { "offset", $"{offset}" },
+                    { "limit", $"{limit}" }
+                }
+            };
+            
+            if( user_id_list != null && username_list != null )
+            {
+                throw new DuoException("user_id_list and username_list cannot both be populated in the same request");
+            }
+            else if( user_id_list != null )
+            {
+                requestParam.RequestData.Add("user_id_list", JsonConvert.SerializeObject(user_id_list));
+            }
+            else if( username_list != null )
+            {
+                requestParam.RequestData.Add("username_list", JsonConvert.SerializeObject(username_list));
+            }
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<IEnumerable<DuoUserResponseModel>>(
+                HttpMethod.Get,
+                "/admin/v1/users",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         } 
         
         /// <summary>
@@ -69,10 +116,51 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User response model</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<DuoUserResponseModel> GetUser(string? username = null, string? email = null)
+        public async Task<DuoResponseModel<DuoUserResponseModel>> GetUser(string? username = null, string? email = null)
         {
-            throw new NotImplementedException();
-        } 
+            // Request parameters
+            var requestParam = new DuoParamRequestData
+            {
+                RequestData = new Dictionary<string, string>()
+            };
+            
+            if( username != null && email != null )
+            {
+                throw new DuoException("username and email cannot both be populated in the same request");
+            }
+            else if( username != null )
+            {
+                requestParam.RequestData.Add("username", username);
+            }
+            else if( email != null )
+            {
+                requestParam.RequestData.Add("email", email);
+            }
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<IEnumerable<DuoUserResponseModel>>(
+                HttpMethod.Get,
+                "/admin/v1/users",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return new DuoResponseModel<DuoUserResponseModel>
+            {
+                ErrorMessageDetail = apiResponse.ResponseData.ErrorMessageDetail,
+                Response = apiResponse.ResponseData.Response?.FirstOrDefault(),
+                ResponseMetadata = apiResponse.ResponseData.ResponseMetadata,
+                ErrorMessage = apiResponse.ResponseData.ErrorMessage,
+                ErrorCode = apiResponse.ResponseData.ErrorCode,
+                Status = apiResponse.ResponseData.Status
+            };
+        }
         
         /// <summary>
         /// Return a single user based on a search of either the username or email address of the user.
@@ -83,9 +171,28 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User response model</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<DuoUserResponseModel> GetUserById(string userid)
+        public async Task<DuoResponseModel<DuoUserResponseModel>> GetUserById(string userid)
         {
-            throw new NotImplementedException();
+            // Validate userid
+            if( string.IsNullOrEmpty(userid) )
+            {
+                throw new DuoException("Invalid userid in request");
+            }
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<DuoUserResponseModel>(
+                HttpMethod.Get,
+                $"/admin/v1/users/{userid}"
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         } 
         #endregion Retrieve Users
         
@@ -99,9 +206,31 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>Model of created user</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<DuoUserResponseModel> CreateUser(DuoUserRequestModel user_model)
+        public async Task<DuoResponseModel<DuoUserResponseModel>> CreateUser(DuoUserRequestModel user_model)
         {
-            throw new NotImplementedException();
+            // Check model
+            user_model = (DuoUserRequestModel)user_model.GetBaseClass(typeof(DuoUserRequestModel));
+            if( string.IsNullOrEmpty(user_model.Username) )
+            {
+                throw new DuoException("username is required in DuoUserRequestModel for CreateUser");
+            }
+            
+            // Make API request
+            var requestParam = new DuoJsonRequestDataObject(user_model);
+            var apiResponse = await duo_api.APICallAsync<DuoUserResponseModel>(
+                HttpMethod.Post,
+                "/admin/v1/users",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -113,9 +242,50 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>Array of Models of created users</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoUserResponseModel>> CreateUser(DuoUserRequestModel[] user_model)
+        public async Task<DuoResponseModel<IEnumerable<DuoUserResponseModel>>> CreateUser(IEnumerable<DuoUserRequestModel> user_model)
         {
-            throw new NotImplementedException();
+            return await CreateUser(user_model.ToArray());
+        }
+        
+        /// <summary>
+        /// Create multiple users
+        /// Requires "Grant write resource" API permission.
+        /// </summary>
+        /// <param name="user_model">
+        /// Array of user models
+        /// </param>
+        /// <returns>Array of Models of created users</returns>
+        /// <exception cref="DuoException">API Exception</exception>
+        public async Task<DuoResponseModel<IEnumerable<DuoUserResponseModel>>> CreateUser(DuoUserRequestModel[] user_model)
+        {
+            // Check model
+            var processedModels = new List<DuoUserRequestModel>();
+            foreach( var user in user_model )
+            {
+                if( string.IsNullOrEmpty(user.Username) )
+                {
+                    throw new DuoException("username is required in DuoUserRequestModel for CreateUser");
+                }
+                
+                processedModels.Add((DuoUserRequestModel)user.GetBaseClass(typeof(DuoUserRequestModel)));
+            }
+            
+            // Make API request
+            var requestParam = new DuoJsonRequestDataObject(new{ users = JsonConvert.SerializeObject(processedModels) });
+            var apiResponse = await duo_api.APICallAsync<IEnumerable<DuoUserResponseModel>>(
+                HttpMethod.Post,
+                "/admin/v1/users/bulk_create",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -126,9 +296,33 @@ namespace duo_api_csharp.Endpoints
         /// User model
         /// </param>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task UpdateUser(DuoUserRequestModel user_model)
+        public async Task<DuoResponseModel> ModifyUser(DuoUserRequestModel user_model)
         {
-            throw new NotImplementedException();
+            // Check userid
+            user_model = (DuoUserRequestModel)user_model.GetBaseClass(typeof(DuoUserRequestModel));
+            var userid = user_model.UserID;
+            if( string.IsNullOrEmpty(userid) )
+            {
+                throw new DuoException("userid is required in DuoUserRequestModel for ModifyUser");
+            }
+            
+            // Make API request
+            user_model.UserID = null;
+            var requestParam = new DuoJsonRequestDataObject(user_model);
+            var apiResponse = await duo_api.APICallAsync<DuoUserResponseModel>(
+                HttpMethod.Post,
+                $"/admin/v1/users/{userid}",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -144,10 +338,10 @@ namespace duo_api_csharp.Endpoints
         /// User model
         /// </param>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task DeleteUser(DuoUserRequestModel user_model)
+        public async Task<DuoResponseModel> DeleteUser(DuoUserRequestModel user_model)
         {
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
-            await DeleteUser(user_model.UserID);
+            return await DeleteUser(user_model.UserID);
         }
         
         /// <summary>
@@ -163,9 +357,28 @@ namespace duo_api_csharp.Endpoints
         /// User ID of the user to delete
         /// </param>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task DeleteUser(string user_id)
+        public async Task<DuoResponseModel> DeleteUser(string user_id)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("userid is required in DuoUserRequestModel for ModifyUser");
+            }
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<DuoUserResponseModel>(
+                HttpMethod.Delete,
+                $"/admin/v1/users/{user_id}"
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -179,11 +392,11 @@ namespace duo_api_csharp.Endpoints
         /// The number of seconds the enrollment code should remain valid. Default: 2592000 (30 days).
         /// </param>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task EnrollUser(DuoUserRequestModel user_model, int valid_secs = 2592000)
+        public async Task<DuoResponseModel<string>> EnrollUser(DuoUserRequestModel user_model, int valid_secs = 2592000)
         {
             if( user_model.Username == null ) throw new DuoException("Invalid Username in request model");
             if( user_model.Email == null ) throw new DuoException("Invalid Email in request model");
-            await EnrollUser(user_model.Username, user_model.Email, valid_secs);
+            return await EnrollUser(user_model.Username, user_model.Email, valid_secs);
         }
         
         /// <summary>
@@ -200,9 +413,30 @@ namespace duo_api_csharp.Endpoints
         /// The number of seconds the enrollment code should remain valid. Default: 2592000 (30 days).
         /// </param>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task EnrollUser(string username, string email, int valid_secs = 2592000)
+        public async Task<DuoResponseModel<string>> EnrollUser(string username, string email, int valid_secs = 2592000)
         {
-            throw new NotImplementedException();
+            // Check username
+            if( string.IsNullOrEmpty(username) || string.IsNullOrEmpty(email) )
+            {
+                throw new DuoException("username and email are required for EnrollUser");
+            }
+            
+            // Make API request
+            var requestParam = new DuoJsonRequestDataObject(new{ username, email, valid_secs = $"{valid_secs}" });
+            var apiResponse = await duo_api.APICallAsync<string>(
+                HttpMethod.Post,
+                $"/admin/v1/users/enroll",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         #endregion Manipulate Users
         
@@ -236,7 +470,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>Array of bypass codes</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<string>> CreateUserBypassCodes(DuoUserRequestModel user_model, int count = 10, string[]? codes = null, bool preserve_existing = false, int reuse_count = 1, int valid_secs = 0)
+        public async Task<DuoResponseModel<IEnumerable<string>>> CreateUserBypassCodes(DuoUserRequestModel user_model, int count = 10, string[]? codes = null, bool preserve_existing = false, int reuse_count = 1, int valid_secs = 0)
         {
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
             return await CreateUserBypassCodes(user_model.UserID, count, codes, preserve_existing, reuse_count, valid_secs);
@@ -271,9 +505,37 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>Array of bypass codes</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<string>> CreateUserBypassCodes(string user_id, int count = 10, string[]? codes = null, bool preserve_existing = false, int reuse_count = 1, int valid_secs = 0)
+        public async Task<DuoResponseModel<IEnumerable<string>>> CreateUserBypassCodes(string user_id, int count = 10, string[]? codes = null, bool preserve_existing = false, int reuse_count = 1, int valid_secs = 0)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("userid is required for CreateUserBypassCodes");
+            }
+            
+            // Make API request
+            var requestParam = new DuoJsonRequestDataObject(new
+            {
+                preserve_existing = preserve_existing ? "true" : "false",
+                codes = codes != null ? string.Join(",", codes) : null,
+                reuse_count = $"{reuse_count}",
+                valid_secs = $"{valid_secs}",
+                count = $"{count}", 
+            });
+            var apiResponse = await duo_api.APICallAsync<IEnumerable<string>>(
+                HttpMethod.Post,
+                $"/admin/v1/users/{user_id}/bypass_codes",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -296,7 +558,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User bypass code model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoBypassCodeModel>> GetUserBypassCodes(DuoUserRequestModel user_model, int limit = 100, int offset = 0)
+        public async Task<DuoResponseModel<IEnumerable<DuoBypassCodeResponseModel>>> GetUserBypassCodes(DuoUserRequestModel user_model, int limit = 100, int offset = 0)
         {
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
             return await GetUserBypassCodes(user_model.UserID, limit, offset);
@@ -322,9 +584,43 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User bypass code model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoBypassCodeModel>> GetUserBypassCodes(string user_id, int limit = 100, int offset = 0)
+        public async Task<DuoResponseModel<IEnumerable<DuoBypassCodeResponseModel>>> GetUserBypassCodes(string user_id, int limit = 100, int offset = 0)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("userid is required for CreateUserBypassCodes");
+            }
+            
+            // Check paging bounds
+            if( limit is > 300 or < 1 ) limit = 100;
+            if( offset < 1 ) offset = 0;
+            
+            // Request parameters
+            var requestParam = new DuoParamRequestData
+            {
+                RequestData = new Dictionary<string, string>
+                {
+                    { "offset", $"{offset}" },
+                    { "limit", $"{limit}" }
+                }
+            };
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<IEnumerable<DuoBypassCodeResponseModel>>(
+                HttpMethod.Get,
+                $"/admin/v1/users/{user_id}/bypass_codes",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         #endregion Bypass Codes
         
@@ -339,7 +635,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <param name="limit">
         /// The maximum number of records returned.
-        /// Default: 100; Max: 300
+        /// Default: 100; Max: 500
         /// </param>
         /// <param name="offset">
         /// The offset from 0 at which to start record retrieval.
@@ -348,7 +644,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User group model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoGroupResponseModel>> GetUserGroups(DuoUserRequestModel user_model, int limit = 100, int offset = 0)
+        public async Task<DuoResponseModel<IEnumerable<DuoGroupResponseModel>>> GetUserGroups(DuoUserRequestModel user_model, int limit = 100, int offset = 0)
         {
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
             return await GetUserGroups(user_model.UserID, limit, offset);
@@ -364,7 +660,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <param name="limit">
         /// The maximum number of records returned.
-        /// Default: 100; Max: 300
+        /// Default: 100; Max: 500
         /// </param>
         /// <param name="offset">
         /// The offset from 0 at which to start record retrieval.
@@ -373,9 +669,43 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User group model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoGroupResponseModel>> GetUserGroups(string user_id, int limit = 100, int offset = 0)
+        public async Task<DuoResponseModel<IEnumerable<DuoGroupResponseModel>>> GetUserGroups(string user_id, int limit = 100, int offset = 0)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for GetUserGroups");
+            }
+            
+            // Check paging bounds
+            if( limit is > 500 or < 1 ) limit = 100;
+            if( offset < 1 ) offset = 0;
+            
+            // Request parameters
+            var requestParam = new DuoParamRequestData
+            {
+                RequestData = new Dictionary<string, string>
+                {
+                    { "offset", $"{offset}" },
+                    { "limit", $"{limit}" }
+                }
+            };
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<IEnumerable<DuoGroupResponseModel>>(
+                HttpMethod.Get,
+                $"/admin/v1/users/{user_id}/groups",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -389,11 +719,11 @@ namespace duo_api_csharp.Endpoints
         /// Group model to associate with the user
         /// </param>
         /// <exception cref="NotImplementedException"></exception>
-        public async Task AssociateGroupWithUser(DuoUserRequestModel user_model, DuoGroupRequestModel group_model)
+        public async Task<DuoResponseModel> AssociateGroupWithUser(DuoUserRequestModel user_model, DuoGroupRequestModel group_model)
         {
             if( group_model.GroupID == null ) throw new DuoException("Invalid GroupID in request model");
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
-            await AssociateGroupWithUser(user_model.UserID, group_model.GroupID);
+            return await AssociateGroupWithUser(user_model.UserID, group_model.GroupID);
         }
         
         /// <summary>
@@ -407,9 +737,37 @@ namespace duo_api_csharp.Endpoints
         /// Group id to associate with the user
         /// </param>
         /// <exception cref="NotImplementedException"></exception>
-        public async Task AssociateGroupWithUser(string user_id, string group_id)
+        public async Task<DuoResponseModel> AssociateGroupWithUser(string user_id, string group_id)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for AssociateGroupWithUser");
+            }
+            if( string.IsNullOrEmpty(group_id) )
+            {
+                throw new DuoException("group_id is required for AssociateGroupWithUser");
+            }
+            
+            // Make API request
+            var requestParam = new DuoJsonRequestDataObject(new
+            {
+                group_id
+            });
+            var apiResponse = await duo_api.APICallAsync(
+                HttpMethod.Post,
+                $"/admin/v1/users/{user_id}/groups",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -424,11 +782,11 @@ namespace duo_api_csharp.Endpoints
         /// Group model to disassociate from the user
         /// </param>
         /// <exception cref="NotImplementedException"></exception>
-        public async Task DisassociateGroupFromUser(DuoUserRequestModel user_model, DuoGroupRequestModel group_model)
+        public async Task<DuoResponseModel> DisassociateGroupFromUser(DuoUserRequestModel user_model, DuoGroupRequestModel group_model)
         {
             if( group_model.GroupID == null ) throw new DuoException("Invalid GroupID in request model");
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
-            await DisassociateGroupFromUser(user_model.UserID, group_model.GroupID);
+            return await DisassociateGroupFromUser(user_model.UserID, group_model.GroupID);
         }
         
         /// <summary>
@@ -443,9 +801,32 @@ namespace duo_api_csharp.Endpoints
         /// Group id to disassociate from the user
         /// </param>
         /// <exception cref="NotImplementedException"></exception>
-        public async Task DisassociateGroupFromUser(string user_id, string group_id)
+        public async Task<DuoResponseModel> DisassociateGroupFromUser(string user_id, string group_id)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for AssociateGroupWithUser");
+            }
+            if( string.IsNullOrEmpty(group_id) )
+            {
+                throw new DuoException("group_id is required for AssociateGroupWithUser");
+            }
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync(
+                HttpMethod.Delete,
+                $"/admin/v1/users/{user_id}/groups/{group_id}"
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         #endregion User Groups
         
@@ -460,7 +841,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <param name="limit">
         /// The maximum number of records returned.
-        /// Default: 100; Max: 300
+        /// Default: 100; Max: 500
         /// </param>
         /// <param name="offset">
         /// The offset from 0 at which to start record retrieval.
@@ -469,7 +850,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User group model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoPhoneResponseModel>> GetUserPhones(DuoUserRequestModel user_model, int limit = 100, int offset = 0)
+        public async Task<DuoResponseModel<IEnumerable<DuoPhoneResponseModel>>> GetUserPhones(DuoUserRequestModel user_model, int limit = 100, int offset = 0)
         {
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
             return await GetUserPhones(user_model.UserID, limit, offset);
@@ -485,7 +866,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <param name="limit">
         /// The maximum number of records returned.
-        /// Default: 100; Max: 300
+        /// Default: 100; Max: 500
         /// </param>
         /// <param name="offset">
         /// The offset from 0 at which to start record retrieval.
@@ -494,9 +875,43 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User group model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoPhoneResponseModel>> GetUserPhones(string user_id, int limit = 100, int offset = 0)
+        public async Task<DuoResponseModel<IEnumerable<DuoPhoneResponseModel>>> GetUserPhones(string user_id, int limit = 100, int offset = 0)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for GetUserPhones");
+            }
+            
+            // Check paging bounds
+            if( limit is > 500 or < 1 ) limit = 100;
+            if( offset < 1 ) offset = 0;
+            
+            // Request parameters
+            var requestParam = new DuoParamRequestData
+            {
+                RequestData = new Dictionary<string, string>
+                {
+                    { "offset", $"{offset}" },
+                    { "limit", $"{limit}" }
+                }
+            };
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<IEnumerable<DuoPhoneResponseModel>>(
+                HttpMethod.Get,
+                $"/admin/v1/users/{user_id}/phones",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -509,11 +924,11 @@ namespace duo_api_csharp.Endpoints
         /// <param name="phone_model">
         /// Phone model to associate with user
         /// </param>
-        public async Task AssociatePhoneWithUser(DuoUserRequestModel user_model, DuoPhoneRequestModel phone_model)
+        public async Task<DuoResponseModel> AssociatePhoneWithUser(DuoUserRequestModel user_model, DuoPhoneRequestModel phone_model)
         {
             if( phone_model.PhoneID == null ) throw new DuoException("Invalid PhoneID in request model");
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
-            await AssociatePhoneWithUser(user_model.UserID, phone_model.PhoneID);
+            return await AssociatePhoneWithUser(user_model.UserID, phone_model.PhoneID);
         }
         
         /// <summary>
@@ -526,9 +941,37 @@ namespace duo_api_csharp.Endpoints
         /// <param name="phone_id">
         /// Phone id to associate with user
         /// </param>
-        public async Task AssociatePhoneWithUser(string user_id, string phone_id)
+        public async Task<DuoResponseModel> AssociatePhoneWithUser(string user_id, string phone_id)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for AssociatePhoneWithUser");
+            }
+            if( string.IsNullOrEmpty(phone_id) )
+            {
+                throw new DuoException("phone_id is required for AssociatePhoneWithUser");
+            }
+            
+            // Make API request
+            var requestParam = new DuoJsonRequestDataObject(new
+            {
+                phone_id
+            });
+            var apiResponse = await duo_api.APICallAsync(
+                HttpMethod.Post,
+                $"/admin/v1/users/{user_id}/phones",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -543,11 +986,11 @@ namespace duo_api_csharp.Endpoints
         /// <param name="phone_model">
         /// Phone model to disassociate from user
         /// </param>
-        public async Task DisassociatePhoneFromUser(DuoUserRequestModel user_model, DuoPhoneRequestModel phone_model)
+        public async Task<DuoResponseModel> DisassociatePhoneFromUser(DuoUserRequestModel user_model, DuoPhoneRequestModel phone_model)
         {
             if( phone_model.PhoneID == null ) throw new DuoException("Invalid PhoneID in request model");
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
-            await DisassociatePhoneFromUser(user_model.UserID, phone_model.PhoneID);
+            return await DisassociatePhoneFromUser(user_model.UserID, phone_model.PhoneID);
         }
         
         /// <summary>
@@ -562,9 +1005,32 @@ namespace duo_api_csharp.Endpoints
         /// <param name="phone_id">
         /// Phone id to disassociate from user
         /// </param>
-        public async Task DisassociatePhoneFromUser(string user_id, string phone_id)
+        public async Task<DuoResponseModel> DisassociatePhoneFromUser(string user_id, string phone_id)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for AssociatePhoneWithUser");
+            }
+            if( string.IsNullOrEmpty(phone_id) )
+            {
+                throw new DuoException("phone_id is required for AssociatePhoneWithUser");
+            }
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync(
+                HttpMethod.Delete,
+                $"/admin/v1/users/{user_id}/phones/{phone_id}"
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         #endregion Phones
         
@@ -579,7 +1045,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <param name="limit">
         /// The maximum number of records returned.
-        /// Default: 100; Max: 300
+        /// Default: 100; Max: 500
         /// </param>
         /// <param name="offset">
         /// The offset from 0 at which to start record retrieval.
@@ -588,7 +1054,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User group model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoPhoneResponseModel>> GetUserHardwareTokens(DuoUserRequestModel user_model, int limit = 100, int offset = 0)
+        public async Task<DuoResponseModel<IEnumerable<DuoHardwareTokenResponseModel>>> GetUserHardwareTokens(DuoUserRequestModel user_model, int limit = 100, int offset = 0)
         {
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
             return await GetUserHardwareTokens(user_model.UserID, limit, offset);
@@ -604,7 +1070,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <param name="limit">
         /// The maximum number of records returned.
-        /// Default: 100; Max: 300
+        /// Default: 100; Max: 500
         /// </param>
         /// <param name="offset">
         /// The offset from 0 at which to start record retrieval.
@@ -613,9 +1079,43 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User group model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoPhoneResponseModel>> GetUserHardwareTokens(string user_id, int limit = 100, int offset = 0)
+        public async Task<DuoResponseModel<IEnumerable<DuoHardwareTokenResponseModel>>> GetUserHardwareTokens(string user_id, int limit = 100, int offset = 0)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for GetUserPhones");
+            }
+            
+            // Check paging bounds
+            if( limit is > 500 or < 1 ) limit = 100;
+            if( offset < 1 ) offset = 0;
+            
+            // Request parameters
+            var requestParam = new DuoParamRequestData
+            {
+                RequestData = new Dictionary<string, string>
+                {
+                    { "offset", $"{offset}" },
+                    { "limit", $"{limit}" }
+                }
+            };
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<IEnumerable<DuoHardwareTokenResponseModel>>(
+                HttpMethod.Get,
+                $"/admin/v1/users/{user_id}/tokens",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -628,11 +1128,11 @@ namespace duo_api_csharp.Endpoints
         /// <param name="token_model">
         /// Token model to associate with user
         /// </param>
-        public async Task AssociateHardwareTokenWithUser(DuoUserRequestModel user_model, DuoHardwareTokenRequestModel token_model)
+        public async Task<DuoResponseModel> AssociateHardwareTokenWithUser(DuoUserRequestModel user_model, DuoHardwareTokenRequestModel token_model)
         {
             if( token_model.TokenID == null ) throw new DuoException("Invalid TokenID in request model");
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
-            await AssociateHardwareTokenWithUser(user_model.UserID, token_model.TokenID);
+            return await AssociateHardwareTokenWithUser(user_model.UserID, token_model.TokenID);
         }
         
         /// <summary>
@@ -645,9 +1145,37 @@ namespace duo_api_csharp.Endpoints
         /// <param name="token_id">
         /// Token id to associate with user
         /// </param>
-        public async Task AssociateHardwareTokenWithUser(string user_id, string token_id)
+        public async Task<DuoResponseModel> AssociateHardwareTokenWithUser(string user_id, string token_id)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for AssociateHardwareTokenWithUser");
+            }
+            if( string.IsNullOrEmpty(token_id) )
+            {
+                throw new DuoException("token_id is required for AssociateHardwareTokenWithUser");
+            }
+            
+            // Make API request
+            var requestParam = new DuoJsonRequestDataObject(new
+            {
+                token_id
+            });
+            var apiResponse = await duo_api.APICallAsync(
+                HttpMethod.Post,
+                $"/admin/v1/users/{user_id}/tokens",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -661,11 +1189,11 @@ namespace duo_api_csharp.Endpoints
         /// <param name="token_model">
         /// Token model to disassociate from user
         /// </param>
-        public async Task DisassociateHardwareTokenWithUser(DuoUserRequestModel user_model, DuoHardwareTokenRequestModel token_model)
+        public async Task<DuoResponseModel> DisassociateHardwareTokenWithUser(DuoUserRequestModel user_model, DuoHardwareTokenRequestModel token_model)
         {
             if( token_model.TokenID == null ) throw new DuoException("Invalid TokenID in request model");
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
-            await DisassociatePhoneFromUser(user_model.UserID, token_model.TokenID);
+            return await DisassociatePhoneFromUser(user_model.UserID, token_model.TokenID);
         }
         
         /// <summary>
@@ -679,9 +1207,32 @@ namespace duo_api_csharp.Endpoints
         /// <param name="token_id">
         /// Token id to disassociate from user
         /// </param>
-        public async Task DisassociateHardwareTokenWithUser(string user_id, string token_id)
+        public async Task<DuoResponseModel> DisassociateHardwareTokenWithUser(string user_id, string token_id)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for DisassociateHardwareTokenWithUser");
+            }
+            if( string.IsNullOrEmpty(token_id) )
+            {
+                throw new DuoException("phone_id is required for DisassociateHardwareTokenWithUser");
+            }
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync(
+                HttpMethod.Delete,
+                $"/admin/v1/users/{user_id}/tokens/{token_id}"
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         #endregion Hardware Tokens
         
@@ -695,7 +1246,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User group model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoWebAuthNRequestModel>> GetUserWebAuthNTokens(DuoUserRequestModel user_model)
+        public async Task<DuoResponseModel<IEnumerable<DuoWebAuthNResponseModel>>> GetUserWebAuthNTokens(DuoUserRequestModel user_model)
         {
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
             return await GetUserWebAuthNTokens(user_model.UserID);
@@ -710,9 +1261,28 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User group model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoWebAuthNRequestModel>> GetUserWebAuthNTokens(string user_id)
+        public async Task<DuoResponseModel<IEnumerable<DuoWebAuthNResponseModel>>> GetUserWebAuthNTokens(string user_id)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for GetUserPhones");
+            }
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<IEnumerable<DuoWebAuthNResponseModel>>(
+                HttpMethod.Get,
+                $"/admin/v1/users/{user_id}/webauthncredentials"
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
 
         /// <summary>
@@ -725,7 +1295,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <param name="limit">
         /// The maximum number of records returned.
-        /// Default: 100; Max: 300
+        /// Default: 100; Max: 500
         /// </param>
         /// <param name="offset">
         /// The offset from 0 at which to start record retrieval.
@@ -734,7 +1304,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User group model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoDesktopAuthenticatorReponseModel>> GetUserDesktopAuthenticators(DuoUserRequestModel user_model, int limit = 100, int offset = 0)
+        public async Task<DuoResponseModel<IEnumerable<DuoDesktopAuthenticatorResponseModel>>> GetUserDesktopAuthenticators(DuoUserRequestModel user_model, int limit = 100, int offset = 0)
         {
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
             return await GetUserDesktopAuthenticators(user_model.UserID, limit, offset);
@@ -750,7 +1320,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <param name="limit">
         /// The maximum number of records returned.
-        /// Default: 100; Max: 300
+        /// Default: 100; Max: 500
         /// </param>
         /// <param name="offset">
         /// The offset from 0 at which to start record retrieval.
@@ -759,9 +1329,43 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>User group model(s)</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<IEnumerable<DuoDesktopAuthenticatorReponseModel>> GetUserDesktopAuthenticators(string user_id, int limit = 100, int offset = 0)
+        public async Task<DuoResponseModel<IEnumerable<DuoDesktopAuthenticatorResponseModel>>> GetUserDesktopAuthenticators(string user_id, int limit = 100, int offset = 0)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for GetUserPhones");
+            }
+            
+            // Check paging bounds
+            if( limit is > 500 or < 1 ) limit = 100;
+            if( offset < 1 ) offset = 0;
+            
+            // Request parameters
+            var requestParam = new DuoParamRequestData
+            {
+                RequestData = new Dictionary<string, string>
+                {
+                    { "offset", $"{offset}" },
+                    { "limit", $"{limit}" }
+                }
+            };
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<IEnumerable<DuoDesktopAuthenticatorResponseModel>>(
+                HttpMethod.Get,
+                $"/admin/v1/users/{user_id}/desktopauthenticators",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         #endregion Other Tokens
         
@@ -779,10 +1383,10 @@ namespace duo_api_csharp.Endpoints
         /// Key retrieved from the Web UI of the directory to sync
         /// </param>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task SyncUserFromDirectory(DuoUserRequestModel user_model, string directory_key)
+        public async Task<DuoResponseModel> SyncUserFromDirectory(DuoUserRequestModel user_model, string directory_key)
         {
-            if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
-            await SyncUserFromDirectory(user_model.UserID, directory_key);
+            if( user_model.Username == null ) throw new DuoException("Invalid Username in request model");
+            return await SyncUserFromDirectory(user_model.Username, directory_key);
         }
         
         /// <summary>
@@ -791,16 +1395,46 @@ namespace duo_api_csharp.Endpoints
         /// and then clicking on the configured directory. Learn more about syncing individual users from Active Directory, OpenLDAP, or Entra ID.
         /// Requires "Grant write resource" API permission.
         /// </summary>
-        /// <param name="user_id">
-        /// User id of the user to sync
+        /// <param name="username">
+        /// Username of the user to sync
         /// </param>
         /// <param name="directory_key">
         /// Key retrieved from the Web UI of the directory to sync
         /// </param>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task SyncUserFromDirectory(string user_id, string directory_key)
+        public async Task<DuoResponseModel> SyncUserFromDirectory(string username, string directory_key)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(username) )
+            {
+                throw new DuoException("username is required for SyncUserFromDirectory");
+            }
+            if( string.IsNullOrEmpty(directory_key) )
+            {
+                throw new DuoException("directory_key is required for SyncUserFromDirectory");
+            }
+            
+            // Request parameters
+            var requestParam = new DuoJsonRequestDataObject(new
+            {
+                username
+            });
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<IEnumerable<DuoDesktopAuthenticatorResponseModel>>(
+                HttpMethod.Post,
+                $"/admin/v1/users/directorysync/{directory_key}/syncuser",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -816,7 +1450,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>Push ID which can be used to validate the message was accepted using VerifyPushResponse</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<string> SendVerificationPush(DuoUserRequestModel user_model, DuoPhoneRequestModel phone_model)
+        public async Task<DuoResponseModel<DuoVerificationPushResponseModel>> SendVerificationPush(DuoUserRequestModel user_model, DuoPhoneRequestModel phone_model)
         {
             if( phone_model.PhoneID == null ) throw new DuoException("Invalid PhoneID in request model");
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
@@ -836,9 +1470,39 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>Push ID which can be used to validate the message was accepted using VerifyPushResponse</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<string> SendVerificationPush(string user_id, string phone_id)
+        public async Task<DuoResponseModel<DuoVerificationPushResponseModel>> SendVerificationPush(string user_id, string phone_id)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for SendVerificationPush");
+            }
+            if( string.IsNullOrEmpty(phone_id) )
+            {
+                throw new DuoException("phone_id is required for SendVerificationPush");
+            }
+            
+            // Request parameters
+            var requestParam = new DuoJsonRequestDataObject(new
+            {
+                phone_id
+            });
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<DuoVerificationPushResponseModel>(
+                HttpMethod.Post,
+                $"/admin/v1/users/{user_id}/send_verification_push",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         
         /// <summary>
@@ -855,7 +1519,7 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>Push response status</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<DuoPushResponse> VerifyPushResponse(DuoUserRequestModel user_model, string push_id)
+        public async Task<DuoResponseModel<DuoVerificationValidationResponseModel>> VerifyPushResponse(DuoUserRequestModel user_model, string push_id)
         {
             if( user_model.UserID == null ) throw new DuoException("Invalid UserID in request model");
             return await VerifyPushResponse(user_model.UserID, push_id);
@@ -875,9 +1539,39 @@ namespace duo_api_csharp.Endpoints
         /// </param>
         /// <returns>Push response status</returns>
         /// <exception cref="DuoException">API Exception</exception>
-        public async Task<DuoPushResponse> VerifyPushResponse(string user_id, string push_id)
+        public async Task<DuoResponseModel<DuoVerificationValidationResponseModel>> VerifyPushResponse(string user_id, string push_id)
         {
-            throw new NotImplementedException();
+            // Check userid
+            if( string.IsNullOrEmpty(user_id) )
+            {
+                throw new DuoException("user_id is required for VerifyPushResponse");
+            }
+            if( string.IsNullOrEmpty(push_id) )
+            {
+                throw new DuoException("push_id is required for VerifyPushResponse");
+            }
+            
+            // Request parameters
+            var requestParam = new DuoJsonRequestDataObject(new
+            {
+                push_id
+            });
+            
+            // Make API request
+            var apiResponse = await duo_api.APICallAsync<DuoVerificationValidationResponseModel>(
+                HttpMethod.Get,
+                $"/admin/v1/users/{user_id}/verification_push_response",
+                requestParam
+            );
+            
+            // Return data
+            if( apiResponse.ResponseData == null )
+            {
+                // All requests should always deserialise into a response
+                throw new DuoException("No response data from server", null, apiResponse.StatusCode, apiResponse.RequestSuccess);
+            }
+            
+            return apiResponse.ResponseData;
         }
         #endregion Other Methods
     }
