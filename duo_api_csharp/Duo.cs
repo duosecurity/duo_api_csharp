@@ -12,21 +12,41 @@ using System.Net.Security;
 using duo_api_csharp.Models;
 using duo_api_csharp.Classes;
 using System.Net.Http.Headers;
+using duo_api_csharp.Endpoints;
 using duo_api_csharp.SignatureTypes;
 using System.Security.Cryptography.X509Certificates;
 
 namespace duo_api_csharp
 {
     /// <summary>
-    /// Create a new instance of the Duo API class
+    /// Duo API class
     /// </summary>
-    /// <param name="ikey">Duo integration key</param>
-    /// <param name="skey">Duo secret key</param>
-    /// <param name="host">API URL to communicate with</param>
-    /// <param name="user_agent">Useragent to send to the API</param>
-    public class DuoAPI(string ikey, string skey, string host, string user_agent = "Duo API CSharp/2.0")
+    public class DuoAPI
     {
         private bool _TLSCertificateValidation = true;
+        private readonly string user_agent;
+        private readonly string ikey;
+        private readonly string skey;
+        private readonly string host;
+        
+        #region Constructor
+        /// <summary>
+        /// Create a new instance of the Duo API class
+        /// </summary>
+        /// <param name="ikey">Duo integration key</param>
+        /// <param name="skey">Duo secret key</param>
+        /// <param name="host">API URL to communicate with</param>
+        /// <param name="user_agent">Useragent to send to the API</param>
+        public DuoAPI(string ikey, string skey, string host, string user_agent = "Duo API CSharp/2.0")
+        {
+            this.ikey = ikey;
+            this.skey = skey;
+            this.host = host;
+            this.user_agent = user_agent;
+            Admin_v1 = new AdminAPIv1(this);
+            Admin_v2 = new AdminAPIv2(this);
+        }
+        #endregion Constructor
 
         #region Public Properties
         ///  <summary>
@@ -61,6 +81,16 @@ namespace duo_api_csharp
         /// If null, the default system RequestTimeout is used
         /// </summary>
         public TimeSpan? RequestTimeout { get; set; } = null;
+        
+        /// <summary>
+        /// Admin API interface (version 1)
+        /// </summary>
+        public AdminAPIv1 Admin_v1 { get; init; }
+        
+        /// <summary>
+        /// Admin API interface (version 2)
+        /// </summary>
+        public AdminAPIv2 Admin_v2 { get; init; }
         #endregion Public Properties
         
         #region Public Methods
@@ -128,7 +158,8 @@ namespace duo_api_csharp
             try
             {
                 using var reader = new StreamReader(clientResponse.Content.ReadAsStream());
-                responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel>(reader.ReadToEnd());
+                responseObject.RawResponseData = reader.ReadToEnd();
+                responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel>(responseObject.RawResponseData);
             }
             catch( Exception ) {}
             return responseObject;
@@ -197,7 +228,8 @@ namespace duo_api_csharp
             // Try to read data from response
             try
             {
-                responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel>(await clientResponse.Content.ReadAsStringAsync());
+                responseObject.RawResponseData = await clientResponse.Content.ReadAsStringAsync();
+                responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel>(responseObject.RawResponseData);
             }
             catch( Exception ) {}
             return responseObject;

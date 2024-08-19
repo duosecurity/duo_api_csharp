@@ -4,7 +4,7 @@
  * https://github.com/duosecurity/duo_api_csharp
  */
  
-namespace duo_api_csharp.Models
+namespace duo_api_csharp.Classes
 {
     /// <summary>
     /// Base exception thrown by the class library

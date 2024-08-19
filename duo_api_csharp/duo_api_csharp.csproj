@@ -29,4 +29,8 @@
     <EmbeddedResource Include="Resources\ca_certs.pem" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Models\v2\" />
+  </ItemGroup>
+
 </Project>

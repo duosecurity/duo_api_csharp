@@ -28,6 +28,11 @@ namespace duo_api_csharp.Models
         /// The response data from the server
         /// </summary>
         public DuoResponseModel? ResponseData { get; set; }
+        
+        /// <summary>
+        /// Raw response data. Only set when no model is passed
+        /// </summary>
+        public string? RawResponseData { get; set; }
     }
     
     /// <summary>
@@ -65,6 +70,12 @@ namespace duo_api_csharp.Models
         public required string Status { get; set; }
         
         /// <summary>
+        /// Metadata for the response from the server
+        /// </summary>
+        [JsonPropertyName("metadata")]
+        public DuoResponseMetadataModel? ResponseMetadata { get; set; }
+        
+        /// <summary>
         /// In the case of an error, this will indcate a server side error code
         /// First three digits indicate the HTTP response code, the second two indicate a more specific error
         /// EG, 40002 = 400, Bad Request; 02 = Invalid request parameters
@@ -96,5 +107,29 @@ namespace duo_api_csharp.Models
         /// </summary>
         [JsonPropertyName("response")]
         public required T Response { get; set; }
+    }
+    
+    /// <summary>
+    /// Paging metadata returned by the API
+    /// https://duo.com/docs/adminapi#response-paging
+    /// </summary>
+    public class DuoResponseMetadataModel
+    {
+        /// <summary>
+        /// An integer indicating the total number of objects retrieved by the API request across all pages of results.
+        /// </summary>
+        public int? TotalObjects { get; set; }
+        
+        /// <summary>
+        /// An integer indicating The offset from 0 at which to start the next paged set of results.
+        /// If not present in the metadata response, then there are no more pages of results left.
+        /// </summary>
+        public int? NextOffset { get; set; }
+        
+        /// <summary>
+        /// An integer indicating the offset from 0 at which the previous paged set of results started.
+        /// If you did not specify next_offset in the request, this defaults to 0 (the beginning of the results).
+        /// </summary>
+        public int? PrevOffset { get; set; }
     }
 }
