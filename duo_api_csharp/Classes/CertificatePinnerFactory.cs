@@ -119,12 +119,13 @@ namespace duo_api_csharp.Classes
         /// <summary>
         /// Read the embedded Duo ca_certs.pem certificates file to get an array of certificate strings
         /// </summary>
+        /// <param name="resource_name">The name of the resource in the assembly to retrieve</param>
         /// <returns>The Duo root CA certificates as strings</returns>
-        internal static string[] _ReadCertsFromFile()
+        internal static string[] _ReadCertsFromFile(string resource_name = "duo_api_csharp.Resources.ca_certs.pem")
         {
             try
             {
-                using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("duo_api_csharp.Resources.ca_certs.pem");
+                using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resource_name);
                 using var reader = (stream != null) ? new StreamReader(stream) : null;
                 if( reader != null )
                 {

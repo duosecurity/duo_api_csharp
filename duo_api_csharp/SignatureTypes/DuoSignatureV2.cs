@@ -11,7 +11,7 @@ using System.Security.Cryptography;
 
 namespace duo_api_csharp.SignatureTypes
 {
-    public class DuoSignatureV2(string ikey, string skey, string host, DateTime requesttime) : IDuoSignatureTypes
+    internal class DuoSignatureV2(string ikey, string skey, string host, DateTime requesttime) : IDuoSignatureTypes
     {
         public DuoSignatureTypes SignatureType => DuoSignatureTypes.Duo_SignatureTypeV2;
         public Dictionary<string, string> DefaultRequestHeaders => new()
@@ -32,10 +32,6 @@ namespace duo_api_csharp.SignatureTypes
                     signingParams.Append($"{Uri.EscapeDataString(paramKey)}={Uri.EscapeDataString(paramValue)}");
                 }
             }
-            
-            //Console.WriteLine($"---------");
-            //Console.WriteLine($"{signingHeader}\n{signingParams}");
-            //Console.WriteLine($"---------");
 
             // Return HMAC signature for request
             var auth = $"{ikey}:{_HmacSign($"{signingHeader}\n{signingParams}")}";

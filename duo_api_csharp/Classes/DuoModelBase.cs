@@ -6,6 +6,9 @@
  
 namespace duo_api_csharp.Classes
 {
+    /// <summary>
+    /// Base class for 
+    /// </summary>
     public class DuoModelBase
     {
         /// <summary>

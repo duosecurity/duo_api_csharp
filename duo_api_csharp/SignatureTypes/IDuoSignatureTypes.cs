@@ -8,14 +8,27 @@ using duo_api_csharp.Models;
 
 namespace duo_api_csharp.SignatureTypes
 {
+    /// <summary>
+    /// The authentication signature type to use
+    /// The default and current scheme is v5
+    /// </summary>
     public enum DuoSignatureTypes
     {
+        /// <summary>
+        /// Original auth scheme
+        /// </summary>
         Duo_SignatureTypeV2 = 2,
+        /// <summary>
+        /// Scheme used for JSON body requests only
+        /// </summary>
         Duo_SignatureTypeV4 = 4,
+        /// <summary>
+        /// Current default authentication scheme
+        /// </summary>
         Duo_SignatureTypeV5 = 5
     }
     
-    public interface IDuoSignatureTypes
+    internal interface IDuoSignatureTypes
     {
         /// <summary>
         /// The version of signature this class implements

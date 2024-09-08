@@ -9,7 +9,7 @@
 namespace duo_api_csharp.Endpoints
 {
     /// <summary>
-    /// Duo Admin API - v2
+    /// Version 2 of the Duo Admin API
     /// </summary>
     public sealed partial class AdminAPIv2
     {

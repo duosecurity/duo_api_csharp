@@ -20,6 +20,10 @@ namespace duo_api_csharp.Endpoints
         public AdminAPIv1_Users Users { get; } = new(duo_api);
     }
     
+    /// <summary>
+    /// Duo Admin API - Users
+    /// https://duo.com/docs/adminapi#users
+    /// </summary>
     public sealed class AdminAPIv1_Users
     {
         #region Internal constructor

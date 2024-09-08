@@ -13,7 +13,7 @@ using System.Security.Cryptography;
 
 namespace duo_api_csharp.SignatureTypes
 {
-    public class DuoSignatureV4(string ikey, string skey, string host, DateTime requesttime) : IDuoSignatureTypes
+    internal class DuoSignatureV4(string ikey, string skey, string host, DateTime requesttime) : IDuoSignatureTypes
     {
         public DuoSignatureTypes SignatureType => DuoSignatureTypes.Duo_SignatureTypeV4;
         public Dictionary<string, string> DefaultRequestHeaders => new()
@@ -50,10 +50,6 @@ namespace duo_api_csharp.SignatureTypes
                 
                 bodyData = JsonConvert.SerializeObject(jsonDataWithObject.RequestData, jsonFormattingSettings);
             }
-            
-            //Console.WriteLine($"---------");
-            //Console.WriteLine($"{signingHeader}\n{signingParams}\n{_Sha512Hash(bodyData)}\n{_Sha512Hash(signingHeaders.ToString())}");
-            //Console.WriteLine($"---------\n{signingHeaders}");
 
             // Return HMAC signature for request
             var auth = $"{ikey}:{_HmacSign($"{signingHeader}\n{signingParams}\n{_Sha512Hash(bodyData)}")}";

@@ -8,6 +8,7 @@
   </PropertyGroup>
   
   <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <RootNamespace>duo_api_csharp</RootNamespace>
   </PropertyGroup>
 
@@ -18,7 +19,6 @@
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <DebugSymbols>false</DebugSymbols>
     <DebugType>None</DebugType>
-    <Optimize>false</Optimize>
   </PropertyGroup>
 
   <ItemGroup>

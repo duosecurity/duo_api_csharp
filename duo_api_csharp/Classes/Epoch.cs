@@ -21,11 +21,6 @@ namespace duo_api_csharp.Classes
 			if( dateTime == null ) return null;
 			return (long)((DateTime)dateTime - epochStart).TotalSeconds;
 		}
-		
-		public static long ToUnix(DateTime dateTime)
-		{
-			return (long)(dateTime - epochStart).TotalSeconds;
-		}
 
 		public static long Now
 	    {

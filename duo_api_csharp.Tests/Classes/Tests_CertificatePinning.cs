@@ -8,7 +8,7 @@ using System.Net.Security;
 using duo_api_csharp.Classes;
 using System.Security.Cryptography.X509Certificates;
 
-namespace duo_api_csharp.Tests
+namespace duo_api_csharp.Tests.Classes
 {
     public class Tests_CertificatePinning
     {
@@ -27,8 +27,9 @@ namespace duo_api_csharp.Tests
             
             // Verify as of a date that the certs are valid for
             chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
             chain.ChainPolicy.VerificationTime = new DateTime(2023, 01, 01);
-            chain.ChainPolicy.ExtraStore.Add(CertFromString(DUO_API_CERT_ROOT));
+            chain.ChainPolicy.CustomTrustStore.Add(CertFromString(DUO_API_CERT_ROOT));
             chain.ChainPolicy.ExtraStore.Add(CertFromString(DUO_API_CERT_INTER));
             Assert.True(chain.Build(DuoApiServerCert()));
             return chain;
@@ -41,10 +42,25 @@ namespace duo_api_csharp.Tests
             
             // Verify as of a date that the certs are valid for
             chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
             chain.ChainPolicy.VerificationTime = new DateTime(2023, 01, 01);
-            chain.ChainPolicy.ExtraStore.Add(CertFromString(MICROSOFT_COM_CERT_ROOT));
+            chain.ChainPolicy.CustomTrustStore.Add(CertFromString(MICROSOFT_COM_CERT_ROOT));
             chain.ChainPolicy.ExtraStore.Add(CertFromString(MICROSOFT_COM_CERT_INTER));
             Assert.True(chain.Build(CertFromString(MICROSOFT_COM_CERT_SERVER)));
+            return chain;
+        }
+        
+        protected static X509Chain InvalidChain()
+        {
+            // Nonsense certificate chain
+            var chain = new X509Chain();
+            
+            // Verify as of a date that the certs are valid for
+            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+            chain.ChainPolicy.VerificationTime = new DateTime(2023, 01, 01);
+            chain.ChainPolicy.ExtraStore.Add(CertFromString(MICROSOFT_COM_CERT_INTER));
+            Assert.False(chain.Build(DuoApiServerCert()));
             return chain;
         }
 
@@ -70,6 +86,12 @@ namespace duo_api_csharp.Tests
         public void Test_ReadingEmbeddedCerts_Returns10Certificates()
         {
             Assert.Equal(10, CertificatePinnerFactory._ReadCertsFromFile().Length);
+        }
+        
+        [Fact]
+        public void Test_ReadingEmbeddedCerts_WithInvalidResourceName_ThrowsApplicationException()
+        {
+            Assert.Throws<ApplicationException>(() => CertificatePinnerFactory._ReadCertsFromFile("fake_resource"));
         }
 
         [Fact]
@@ -106,6 +128,13 @@ namespace duo_api_csharp.Tests
             var pinner = CertificatePinnerFactory.GetDuoCertificatePinner();
             Assert.False(pinner(null!, DuoApiServerCert(), MicrosoftComChain(), SslPolicyErrors.None));
         }
+        
+        [Fact]
+        public void Test_UsingDuoPinner_InvalidChain_TLSNotValid()
+        {
+            var pinner = CertificatePinnerFactory.GetDuoCertificatePinner();
+            Assert.False(pinner(null!, DuoApiServerCert(), InvalidChain(), SslPolicyErrors.None));
+        }
 
         [Fact]
         public void Test_UsingCustomPinner_ValidChain_TLSValid()
@@ -115,7 +144,7 @@ namespace duo_api_csharp.Tests
                     CertFromString(MICROSOFT_COM_CERT_ROOT)
                 };
 
-            var pinner = new CertificatePinnerFactory(certCollection)._GetPinner();
+            var pinner = CertificatePinnerFactory.GetCustomRootCertificatesPinner(certCollection);
             Assert.True(pinner(null!, CertFromString(MICROSOFT_COM_CERT_SERVER), MicrosoftComChain(), SslPolicyErrors.None));
         }  
 
@@ -152,6 +181,13 @@ namespace duo_api_csharp.Tests
         {
             var pinner = CertificatePinnerFactory.GetCertificateDisabler();
             Assert.True(pinner(null!, DuoApiServerCert(), MicrosoftComChain(), SslPolicyErrors.None));
+        }
+        
+        [Fact]
+        public void Test_UsingDisabledPinner_InvalidChain_TLSNotValid()
+        {
+            var pinner = CertificatePinnerFactory.GetDuoCertificatePinner();
+            Assert.False(pinner(null!, DuoApiServerCert(), InvalidChain(), SslPolicyErrors.None));
         }
     }
 }

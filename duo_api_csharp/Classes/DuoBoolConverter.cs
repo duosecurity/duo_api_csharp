@@ -12,7 +12,7 @@ namespace duo_api_csharp.Classes
     /// This exists because the Duo API is unable to accept anything other than strings
     /// Hopefully, this limitation will be removed in a future version iteration
     /// </summary>
-    public class DuoBoolConverter : JsonConverter
+    internal class DuoBoolConverter : JsonConverter
     {
         public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
         {

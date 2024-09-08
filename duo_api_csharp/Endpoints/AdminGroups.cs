@@ -11,6 +11,9 @@ using duo_api_csharp.Models.v1;
 
 namespace duo_api_csharp.Endpoints
 {
+    /// <summary>
+    /// Version 1 of the Duo Admin API
+    /// </summary>
     public sealed partial class AdminAPIv1
     {
         /// <summary>
@@ -20,6 +23,10 @@ namespace duo_api_csharp.Endpoints
         public AdminAPIv1_Groups Groups { get; } = new(duo_api);
     }
     
+    /// <summary>
+    /// Duo Admin API - Groups
+    /// https://duo.com/docs/adminapi#groups
+    /// </summary>
     public sealed class AdminAPIv1_Groups
     {
         #region Internal constructor
