@@ -11,6 +11,9 @@ using duo_api_csharp.Models.v1;
 
 namespace duo_api_csharp.Endpoints
 {
+    /// <summary>
+    /// Version 1 of the Duo Admin API
+    /// </summary>
     public sealed partial class AdminAPIv1(DuoAPI duo_api)
     {
         /// <summary>

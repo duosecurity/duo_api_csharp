@@ -165,7 +165,11 @@ namespace duo_api_csharp
                 responseObject.RawResponseData = reader.ReadToEnd();
                 responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel>(responseObject.RawResponseData);
             }
-            catch( Exception ) {}
+            catch( Exception Ex )
+            {
+                throw new DuoException("A deserialisation error has occoured. See the inner exception for more details", Ex, clientResponse.StatusCode, clientResponse.IsSuccessStatusCode);
+            }
+            
             return responseObject;
         }
         
@@ -239,7 +243,11 @@ namespace duo_api_csharp
                 responseObject.RawResponseData = await clientResponse.Content.ReadAsStringAsync();
                 responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel>(responseObject.RawResponseData);
             }
-            catch( Exception ) {}
+            catch( Exception Ex )
+            {
+                throw new DuoException("A deserialisation error has occoured. See the inner exception for more details", Ex, clientResponse.StatusCode, clientResponse.IsSuccessStatusCode);
+            }
+            
             return responseObject;
         }
         
@@ -309,7 +317,11 @@ namespace duo_api_csharp
                 using var reader = new StreamReader(clientResponse.Content.ReadAsStream());
                 responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel<T>>(reader.ReadToEnd());
             }
-            catch( Exception ) {}
+            catch( Exception Ex )
+            {
+                throw new DuoException("A deserialisation error has occoured. See the inner exception for more details", Ex, clientResponse.StatusCode, clientResponse.IsSuccessStatusCode);
+            }
+            
             return responseObject;
         }
         
@@ -378,7 +390,11 @@ namespace duo_api_csharp
             {
                 responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel<T>>(await clientResponse.Content.ReadAsStringAsync());
             }
-            catch( Exception ) {}
+            catch( Exception Ex )
+            {
+                throw new DuoException("A deserialisation error has occoured. See the inner exception for more details", Ex, clientResponse.StatusCode, clientResponse.IsSuccessStatusCode);
+            }
+            
             return responseObject;
         }
         #endregion Public Methods

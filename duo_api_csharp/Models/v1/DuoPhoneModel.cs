@@ -141,26 +141,13 @@ namespace duo_api_csharp.Models.v1
 		[JsonProperty("sms_passcodes_sent")]
 		[JsonConverter(typeof(DuoBoolConverter))]
 		public bool? SMSPasscodesSent { get; set; }
-    
-		[JsonProperty("last_seen")]
-		private long? _LastSeen { get; set; }
 		
 		/// <summary>
 		/// Time of the last contact between Duo's service and the activated Duo Mobile app installed on the phone.
 		/// Null if the device has never activated Duo Mobile or if the platform does not support it.
 		/// </summary>
-		[NotMapped]
-		public DateTime? LastSeenOn
-		{
-			get
-			{
-				return Epoch.FromUnix(_LastSeen);
-			}
-			set
-			{
-				_LastSeen = Epoch.ToUnix(value);
-			}
-		}
+		[JsonProperty("last_seen")]
+		public DateTime? LastSeenOn { get; set; }
     
 		/// <summary>
 		/// A list of end users associated with this hardware token.

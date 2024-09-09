@@ -13,6 +13,8 @@ namespace duo_api_csharp.Classes
     /// </summary>
     /// <param name="message">Error message</param>
     /// <param name="inner">Any inner exception, if present</param>
+    /// <param name="statusCode">The HTTP status code if present</param>
+    /// <param name="requestSuccess">Request success result, if present</param>
     public class DuoException(string message, Exception? inner = null, HttpStatusCode? statusCode = null, bool? requestSuccess = null) : Exception(message, inner)
     {
         /// <summary>
