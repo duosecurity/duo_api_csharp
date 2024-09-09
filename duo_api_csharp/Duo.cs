@@ -1,821 +1,604 @@
 /*
- * Copyright (c) 2018 Duo Security
+ * Copyright (c) 2022-2024 Cisco Systems, Inc. and/or its affiliates
  * All rights reserved
+ * https://github.com/duosecurity/duo_api_csharp
  */
 
-using System;
-using System.Configuration;
-using System.Collections.Generic;
-using System.IO;
 using System.Net;
-using System.Security.Cryptography;
-using System.Text.RegularExpressions;
-using System.Text;
 using System.Web;
-using System.Globalization;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using Newtonsoft.Json;
 using System.Net.Security;
-using System.Text.Json;
-using Duo.Extensions;
+using duo_api_csharp.Models;
+using duo_api_csharp.Classes;
+using System.Net.Http.Headers;
+using duo_api_csharp.Endpoints;
+using duo_api_csharp.SignatureTypes;
+using System.Security.Cryptography.X509Certificates;
 
-namespace Duo
+namespace duo_api_csharp
 {
-    public class DuoApi
+    /// <summary>
+    /// Duo API class
+    /// </summary>
+    public class DuoAPI
     {
-        public string DEFAULT_AGENT = "DuoAPICSharp/1.0";
-
-        private const int INITIAL_BACKOFF_MS = 1000;
-        private const int MAX_BACKOFF_MS = 32000;
-        private const int BACKOFF_FACTOR = 2;
-        private const int RATE_LIMIT_HTTP_CODE = 429;
-        private string ikey;
-        private string skey;
-        private string host;
-        private string url_scheme;
-        private string user_agent;
-        private SleepService sleepService;
-        private RandomService randomService;
-        private bool sslCertValidation = true;
-        private X509CertificateCollection customRoots = null;
+        private bool _TLSCertificateValidation = true;
+        private readonly string user_agent;
+        private readonly string ikey;
+        private readonly string skey;
+        private readonly string host;
         
-        // TLS 1.0/1.1 deprecation effective June 30, 2023
-        // Of the SecurityProtocolType enum, it should be noted that SystemDefault is not available prior to .NET 4.7 and TLS 1.3 is not available prior to .NET 4.8.
-        private static SecurityProtocolType SelectSecurityProtocolType
-        {
-            get
-            {
-                SecurityProtocolType t;
-                if (!Enum.TryParse(ConfigurationManager.AppSettings["DuoAPI_SecurityProtocolType"], out t))
-                    return SecurityProtocolType.Tls12;
-
-                return t;
-            }
-        }
-
+        #region Constructor
+        /// <summary>
+        /// Create a new instance of the Duo API class
+        /// </summary>
         /// <param name="ikey">Duo integration key</param>
         /// <param name="skey">Duo secret key</param>
-        /// <param name="host">Application secret key</param>
-        public DuoApi(string ikey, string skey, string host)
-            : this(ikey, skey, host, null)
-        {
-        }
-
-        /// <param name="ikey">Duo integration key</param>
-        /// <param name="skey">Duo secret key</param>
-        /// <param name="host">Application secret key</param>
-        /// <param name="user_agent">HTTP client User-Agent</param>
-        public DuoApi(string ikey, string skey, string host, string user_agent)
-            : this(ikey, skey, host, user_agent, "https", new ThreadSleepService(), new SystemRandomService())
-        {
-        }
-
-        protected DuoApi(string ikey, string skey, string host, string user_agent, string url_scheme,
-                SleepService sleepService, RandomService randomService)
+        /// <param name="host">API URL to communicate with</param>
+        /// <param name="user_agent">Useragent to send to the API</param>
+        public DuoAPI(string ikey, string skey, string host, string user_agent = "Duo API CSharp/2.0")
         {
             this.ikey = ikey;
             this.skey = skey;
             this.host = host;
-            this.url_scheme = url_scheme;
-            this.sleepService = sleepService;
-            this.randomService = randomService;
-            if (String.IsNullOrEmpty(user_agent))
-            {
-                this.user_agent = FormatUserAgent(DEFAULT_AGENT);
-            }
-            else
-            {
-                this.user_agent = user_agent;
-            }
+            this.user_agent = user_agent;
+            Admin_v1 = new AdminAPIv1(this);
+            Admin_v2 = new AdminAPIv2(this);
         }
+        #endregion Constructor
 
+        #region Public Properties
         ///  <summary>
         /// Disables SSL certificate validation for the API calls the client makes.
         /// Incomptible with UseCustomRootCertificates since certificates will not be checked.
-        /// 
-        /// THIS SHOULD NEVER BE USED IN A PRODUCTION ENVIRONMENT
+        /// Only available in debug builds
         /// </summary>
-        /// <returns>The DuoApi</returns>
-        public DuoApi DisableSslCertificateValidation()
+        public bool DisableTLSCertificateValidation
         {
-            sslCertValidation = false;
-            return this;
+            get
+            {
+                return _TLSCertificateValidation;
+            }
+            set
+            {
+                #if DEBUG
+                _TLSCertificateValidation = value;
+                #else
+                throw new Exception("Disabling TLS validation is not available in release builds");
+                #endif
+            }
         }
 
         /// <summary>
         /// Override the set of Duo root certificates used for certificate pinning.  Provide a collection of acceptable root certificates.
-        /// 
         /// Incompatible with DisableSslCertificateValidation - if that is enabled, certificate pinning is not done at all. 
         /// </summary>
-        /// <param name="customRoots">The custom set of root certificates to trust</param>
-        /// <returns>The DuoApi</returns>
-        public DuoApi UseCustomRootCertificates(X509CertificateCollection customRoots)
+        public X509CertificateCollection? CustomRootCertificates { get; set; } = null;
+        
+        /// <summary>
+        /// Time, after which elapsed we consider the API request to have failed and return an error response
+        /// If null, the default system RequestTimeout is used
+        /// </summary>
+        public TimeSpan? RequestTimeout { get; set; } = null;
+        
+        /// <summary>
+        /// Admin API interface (version 1)
+        /// </summary>
+        public AdminAPIv1 Admin_v1 { get; init; }
+        
+        /// <summary>
+        /// Admin API interface (version 2)
+        /// </summary>
+        public AdminAPIv2 Admin_v2 { get; init; }
+        #endregion Public Properties
+        
+        #region Public Methods
+        /// <summary>
+        /// Perform a Duo API call, disregarding response data other than success state
+        /// To return response data, specify a model to deserialise the response into with T
+        /// </summary>
+        /// <param name="method">HTTP Method to </param>
+        /// <param name="path">The API path, excluding the host</param>
+        /// <param name="param">Parameters that make up the request</param>
+        /// <param name="date">The current date and time, used to authenticate
+        /// the API request. Typically, you should specify DateTime.UtcNow,
+        /// but if you do not wish to rely on the system-wide clock, you may
+        /// determine the current date/time by some other means.</param>
+        /// <param name="signatureType">The type of signature to use to sign the request</param>
+        /// <returns>Response model indicating status code and response data, if any</returns>
+        /// <exception name="DuoException">Exception on unexpected error that could not be returned as part of the response model</exception>
+        public DuoAPIResponse APICall(
+                HttpMethod method, 
+                string path, 
+                DuoRequestData? param = null, 
+                DateTime? date = null, 
+                DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV5)
         {
-            this.customRoots = customRoots;
-            return this;
-        }
-
-        public static string FinishCanonicalize(string p)
-        {
-            // Signatures require upper-case hex digits.
-            p = Regex.Replace(p,
-                            "(%[0-9A-Fa-f][0-9A-Fa-f])",
-                            c => c.Value.ToUpperInvariant());
-            // Escape only the expected characters.
-            p = Regex.Replace(p,
-                            "([!'()*])",
-                            c => "%" + Convert.ToByte(c.Value[0]).ToString("X"));
-            p = p.Replace("%7E", "~");
-            // UrlEncode converts space (" ") to "+". The
-            // signature algorithm requires "%20" instead. Actual
-            // + has already been replaced with %2B.
-            p = p.Replace("+", "%20");
-            return p;
-        }
-
-        public static string CanonicalizeParams(Dictionary<string, string> parameters)
-        {
-            var ret = new List<String>();
-            foreach (KeyValuePair<string, string> pair in parameters)
+            // Get request date
+            var requestDate = date ?? DateTime.UtcNow;
+            var serverRequestUri = new UriBuilder
             {
-                string p = String.Format("{0}={1}",
-                                         HttpUtility.UrlEncode(pair.Key),
-                                         HttpUtility.UrlEncode(pair.Value));
-
-                p = FinishCanonicalize(p);
-                ret.Add(p);
-            }
-            ret.Sort(StringComparer.Ordinal);
-            return string.Join("&", ret.ToArray());
-        }
-
-
-        // handle value as an object eg. next_offset = ["123", "fdajkld"]
-        public static string CanonicalizeParams(Dictionary<string, object> parameters)
-        {
-            var ret = new List<String>();
-            foreach (KeyValuePair<string, object> pair in parameters)
-            {
-                string p = "";
-                if (pair.Value.GetType() == typeof(string[]))
-                {
-                    string[] values = (string[])pair.Value;
-                    string value1 = values[0];
-                    string value2 = values[1];
-                    p = String.Format("{0}={1}&{2}={3}",
-                                        HttpUtility.UrlEncode(pair.Key),
-                                        HttpUtility.UrlEncode(value1),
-                                        HttpUtility.UrlEncode(pair.Key),
-                                        HttpUtility.UrlEncode(value2));
-                }
-                else
-                {
-                    string val = (string)pair.Value;
-                    p = String.Format("{0}={1}",
-                                        HttpUtility.UrlEncode(pair.Key),
-                                        HttpUtility.UrlEncode(val));
-                }
-                p = FinishCanonicalize(p);
-                ret.Add(p);
-            }
-            ret.Sort(StringComparer.Ordinal);
-            return string.Join("&", ret.ToArray());
-        }
-
-
-        protected string CanonicalizeRequest(string method,
-                                             string path,
-                                             string canon_params,
-                                             string date)
-        {
-            string[] lines = {
-                date,
-                method.ToUpperInvariant(),
-                this.host.ToLower(),
-                path,
-                canon_params,
+                Scheme = "https",
+                Host = host,
+                Path = path,
+                Port = -1
             };
-            string canon = String.Join("\n",
-                                       lines);
-            return canon;
-        }
 
-        public string Sign(string method,
-                           string path,
-                           string canon_params,
-                           string date)
-        {
-            string canon = this.CanonicalizeRequest(method,
-                                                    path,
-                                                    canon_params,
-                                                    date);
-            string sig = this.HmacSign(canon);
-            string auth = this.ikey + ':' + sig;
-            return "Basic " + DuoApi.Encode64(auth);
-        }
-
-        public string ApiCall(string method,
-                              string path,
-                              Dictionary<string, string> parameters)
-        {
-            HttpStatusCode statusCode;
-            return ApiCall(method, path, parameters, 0, DateTime.UtcNow, out statusCode);
-        }
-
-        /// <param name="timeout">The request timeout, in milliseconds.
-        /// Specify 0 to use the system-default timeout. Use caution if
-        /// you choose to specify a custom timeout - some API
-        /// calls (particularly in the Auth APIs) will not
-        /// return a response until an out-of-band authentication process
-        /// has completed. In some cases, this may take as much as a
-        /// small number of minutes.</param>
-        public string ApiCall(string method,
-                              string path,
-                              Dictionary<string, string> parameters,
-                              int timeout,
-                              out HttpStatusCode statusCode)
-        {
-            return ApiCall(method, path, parameters, 0, DateTime.UtcNow, out statusCode);
-        }
-
-        /// <param name="date">The current date and time, used to authenticate
-        /// the API request. Typically, you should specify DateTime.UtcNow,
-        /// but if you do not wish to rely on the system-wide clock, you may
-        /// determine the current date/time by some other means.</param>
-        /// <param name="timeout">The request timeout, in milliseconds.
-        /// Specify 0 to use the system-default timeout. Use caution if
-        /// you choose to specify a custom timeout - some API
-        /// calls (particularly in the Auth APIs) will not
-        /// return a response until an out-of-band authentication process
-        /// has completed. In some cases, this may take as much as a
-        /// small number of minutes.</param>
-        public string ApiCall(string method,
-                              string path,
-                              Dictionary<string, string> parameters,
-                              int timeout,
-                              DateTime date,
-                              out HttpStatusCode statusCode)
-        {
-            string canon_params = DuoApi.CanonicalizeParams(parameters);
-            string query = "";
-            if (!method.Equals("POST") && !method.Equals("PUT"))
-            {
-                if (parameters.Count > 0)
-                {
-                    query = "?" + canon_params;
-                }
-            }
-            string url = string.Format("{0}://{1}{2}{3}",
-                                       this.url_scheme,
-                                       this.host,
-                                       path,
-                                       query);
-
-            string date_string = DuoApi.DateToRFC822(date);
-            string auth = this.Sign(method, path, canon_params, date_string);
-
-
-
-            HttpWebResponse response = AttemptRetriableHttpRequest(
-                method, url, auth, date_string, canon_params, timeout);
-            StreamReader reader
-                = new StreamReader(response.GetResponseStream());
-            statusCode = response.StatusCode;
-            return reader.ReadToEnd();
-        }
-
-        private HttpWebRequest PrepareHttpRequest(String method, String url, String auth, String date,
-            String cannonParams, int timeout)
-        {
-            ServicePointManager.SecurityProtocol = SelectSecurityProtocolType;
+            // Check signature
+            IDuoSignatureTypes DuoSignature;
+            if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV2 ) DuoSignature = new DuoSignatureV2(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV4 ) DuoSignature = new DuoSignatureV4(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV5 ) DuoSignature = new DuoSignatureV5(ikey, skey, host, requestDate);
+            else throw new DuoException("Invalid or unsupported signature type");
             
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
-            request.ServerCertificateValidationCallback = GetCertificatePinner();
-            request.Method = method;
-            request.Accept = "application/json";
-            request.Headers.Add("Authorization", auth);
-            request.Headers.Add("X-Duo-Date", date);
-            request.UserAgent = this.user_agent;
-            // If no proxy, check for and use WinHTTP proxy as autoconfig won't pick this up when run from a service
-            if (!HasProxyServer(request))
-                request.Proxy = GetWinhttpProxy();
-
-            if (method.Equals("POST") || method.Equals("PUT"))
+            // Except for POST,PUT and PATCH, put parameters in the URL
+            if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && param is DuoParamRequestData paramData )
             {
-                byte[] data = Encoding.UTF8.GetBytes(cannonParams);
-                request.ContentType = "application/x-www-form-urlencoded";
-                request.ContentLength = data.Length;
-                using (Stream requestStream = request.GetRequestStream())
+                var queryBuilder = new StringBuilder();
+                foreach( var (paramKey, paramValue) in paramData.RequestData )
                 {
-                    requestStream.Write(data, 0, data.Length);
+                    if( queryBuilder.Length != 0 ) queryBuilder.Append('&');
+                    queryBuilder.Append($"{HttpUtility.UrlEncode(paramKey)}={HttpUtility.UrlEncode(paramValue)}");
                 }
+                serverRequestUri.Query = queryBuilder.ToString();
             }
-            if (timeout > 0)
+            else if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && param is DuoJsonRequestData )
             {
-                request.Timeout = timeout;
+                throw new DuoException("DuoJsonRequestData provided and HttpMethod != Post|Put|Patch. This is unsupported!");
             }
-
-            return request;
-        }
-
-        private RemoteCertificateValidationCallback GetCertificatePinner()
-        {
-            if (!sslCertValidation)
+            
+            // Get request auth and send
+            var requestHeaders = DuoSignature.DefaultRequestHeaders;
+            var requestAuthentication = DuoSignature.SignRequest(method, path, requestDate, param, requestHeaders);
+            var clientResponse = _SendHTTPRequest(method, serverRequestUri.Uri, requestAuthentication, signatureType, param, requestHeaders);
+            var responseObject = new DuoAPIResponse
             {
-                // Pinner that effectively disables cert pinning by always returning true
-                return CertificatePinnerFactory.GetCertificateDisabler();
-            }
-
-            if (customRoots != null)
-            {
-                return CertificatePinnerFactory.GetCustomRootCertificatesPinner(customRoots);
-            }
-
-            return CertificatePinnerFactory.GetDuoCertificatePinner();
-        }
-
-        private HttpWebResponse AttemptRetriableHttpRequest(
-            String method, String url, String auth, String date, String cannonParams, int timeout)
-        {
-            int backoffMs = INITIAL_BACKOFF_MS;
-            while (true)
-            {
-                // Do the request and process the result.
-                HttpWebRequest request = PrepareHttpRequest(method, url, auth, date, cannonParams, timeout);
-                HttpWebResponse response;
-                try
-                {
-                    response = (HttpWebResponse)request.GetResponse();
-                }
-                catch (WebException ex)
-                {
-                    response = (HttpWebResponse)ex.Response;
-                    if (response == null)
-                    {
-                        throw;
-                    }
-                }
-
-                if (response.StatusCode != (HttpStatusCode)RATE_LIMIT_HTTP_CODE || backoffMs > MAX_BACKOFF_MS)
-                {
-                    return response;
-                }
-
-                sleepService.Sleep(backoffMs + randomService.GetInt(1001));
-                backoffMs *= BACKOFF_FACTOR;
-            }
-        }
-
-        /// <param name="date">The current date and time, used to authenticate
-        /// the API request. Typically, you should specify DateTime.UtcNow,
-        /// but if you do not wish to rely on the system-wide clock, you may
-        /// determine the current date/time by some other means.</param>
-        /// <param name="timeout">The request timeout, in milliseconds.
-        /// Specify 0 to use the system-default timeout. Use caution if
-        /// you choose to specify a custom timeout - some API
-        /// calls (particularly in the Auth APIs) will not
-        /// return a complete JSON response.</param>
-        /// raises if JSON response indicates an error
-        private Dictionary<string, object> BaseJSONApiCall(string method,
-                                string path,
-                                Dictionary<string, string> parameters,
-                                int timeout,
-                                DateTime date)
-        {
-            HttpStatusCode statusCode;
-            string res = this.ApiCall(method, path, parameters, timeout, date, out statusCode);
-
+                RequestSuccess = clientResponse.IsSuccessStatusCode,
+                StatusCode = clientResponse.StatusCode
+            };
+            
+            // Try to read data from response
             try
             {
-                var dict = DeserializeJsonToMixedDictionary(res);
-                if (dict["stat"] as string == "OK")
+                using var reader = new StreamReader(clientResponse.Content.ReadAsStream());
+                responseObject.RawResponseData = reader.ReadToEnd();
+                responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel>(responseObject.RawResponseData);
+            }
+            catch( Exception Ex )
+            {
+                throw new DuoException("A deserialisation error has occoured. See the inner exception for more details", Ex, clientResponse.StatusCode, clientResponse.IsSuccessStatusCode);
+            }
+            
+            return responseObject;
+        }
+        
+        /// <summary>
+        /// Perform a Duo API call, disregarding response data other than success state
+        /// To return response data, specify a model to deserialise the response into with T
+        /// </summary>
+        /// <param name="method">HTTP Method to </param>
+        /// <param name="path">The API path, excluding the host</param>
+        /// <param name="param">Parameters that make up the request</param>
+        /// <param name="date">The current date and time, used to authenticate
+        /// the API request. Typically, you should specify DateTime.UtcNow,
+        /// but if you do not wish to rely on the system-wide clock, you may
+        /// determine the current date/time by some other means.</param>
+        /// <param name="signatureType">The type of signature to use to sign the request</param>
+        /// <returns>Response model indicating status code and response data, if any</returns>
+        /// <exception name="DuoException">Exception on unexpected error that could not be returned as part of the response model</exception>
+        public async Task<DuoAPIResponse> APICallAsync(
+                HttpMethod method, 
+                string path, 
+                DuoRequestData? param = null, 
+                DateTime? date = null, 
+                DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV5)
+        {
+            // Get request date
+            var requestDate = date ?? DateTime.UtcNow;
+            var serverRequestUri = new UriBuilder
+            {
+                Scheme = "https",
+                Host = host,
+                Path = path,
+                Port = -1
+            };
+
+            // Check signature
+            IDuoSignatureTypes DuoSignature;
+            if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV2 ) DuoSignature = new DuoSignatureV2(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV4 ) DuoSignature = new DuoSignatureV4(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV5 ) DuoSignature = new DuoSignatureV5(ikey, skey, host, requestDate);
+            else throw new DuoException("Invalid or unsupported signature type");
+            
+            // Except for POST,PUT and PATCH, put parameters in the URL
+            if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && param is DuoParamRequestData paramData )
+            {
+                var queryBuilder = new StringBuilder();
+                foreach( var (paramKey, paramValue) in paramData.RequestData )
                 {
-                    return dict;
+                    if( queryBuilder.Length != 0 ) queryBuilder.Append('&');
+                    queryBuilder.Append($"{HttpUtility.UrlEncode(paramKey)}={HttpUtility.UrlEncode(paramValue)}");
                 }
-                else
+                serverRequestUri.Query = queryBuilder.ToString();
+            }
+            else if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && param is DuoJsonRequestData )
+            {
+                throw new DuoException("DuoJsonRequestData provided and HttpMethod != Post|Put|Patch. This is unsupported!");
+            }
+            
+            // Get request auth and send
+            var requestHeaders = DuoSignature.DefaultRequestHeaders;
+            var requestAuthentication = DuoSignature.SignRequest(method, path, requestDate, param, requestHeaders);
+            var clientResponse = await _SendHTTPRequestAsync(method, serverRequestUri.Uri, requestAuthentication, signatureType, param, requestHeaders);
+            var responseObject = new DuoAPIResponse
+            {
+                RequestSuccess = clientResponse.IsSuccessStatusCode,
+                StatusCode = clientResponse.StatusCode
+            };
+            
+            // Try to read data from response
+            try
+            {
+                responseObject.RawResponseData = await clientResponse.Content.ReadAsStringAsync();
+                responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel>(responseObject.RawResponseData);
+            }
+            catch( Exception Ex )
+            {
+                throw new DuoException("A deserialisation error has occoured. See the inner exception for more details", Ex, clientResponse.StatusCode, clientResponse.IsSuccessStatusCode);
+            }
+            
+            return responseObject;
+        }
+        
+        /// <summary>
+        /// Perform a Duo API call, disregarding response data other than success state
+        /// To return response data, specify a model to deserialise the response into with T
+        /// </summary>
+        /// <param name="method">HTTP Method to </param>
+        /// <param name="path">The API path, excluding the host</param>
+        /// <param name="param">Parameters that make up the request</param>
+        /// <param name="date">The current date and time, used to authenticate
+        /// the API request. Typically, you should specify DateTime.UtcNow,
+        /// but if you do not wish to rely on the system-wide clock, you may
+        /// determine the current date/time by some other means.</param>
+        /// <param name="signatureType">The type of signature to use to sign the request</param>
+        /// <returns>Response model indicating status code and response data, if any</returns>
+        /// <exception name="DuoException">Exception on unexpected error that could not be returned as part of the response model</exception>
+        public DuoAPIResponse<T> APICall<T>(
+                HttpMethod method, 
+                string path, 
+                DuoRequestData? param = null, 
+                DateTime? date = null, 
+                DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV5)
+        {
+            // Get request date
+            var requestDate = date ?? DateTime.UtcNow;
+            var serverRequestUri = new UriBuilder
+            {
+                Scheme = "https",
+                Host = host,
+                Path = path,
+                Port = -1
+            };
+
+            // Check signature
+            IDuoSignatureTypes DuoSignature;
+            if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV2 ) DuoSignature = new DuoSignatureV2(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV4 ) DuoSignature = new DuoSignatureV4(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV5 ) DuoSignature = new DuoSignatureV5(ikey, skey, host, requestDate);
+            else throw new DuoException("Invalid or unsupported signature type");
+            
+            // Except for POST,PUT and PATCH, put parameters in the URL
+            if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && param is DuoParamRequestData paramData )
+            {
+                var queryBuilder = new StringBuilder();
+                foreach( var (paramKey, paramValue) in paramData.RequestData )
                 {
-                    int? check = dict["code"] as int?;
-                    int code;
-                    if (check.HasValue)
+                    if( queryBuilder.Length != 0 ) queryBuilder.Append('&');
+                    queryBuilder.Append($"{HttpUtility.UrlEncode(paramKey)}={HttpUtility.UrlEncode(paramValue)}");
+                }
+                serverRequestUri.Query = queryBuilder.ToString();
+            }
+            
+            // Get request auth and send
+            var requestHeaders = DuoSignature.DefaultRequestHeaders;
+            var requestAuthentication = DuoSignature.SignRequest(method, path, requestDate, param, requestHeaders);
+            var clientResponse = _SendHTTPRequest(method, serverRequestUri.Uri, requestAuthentication, signatureType, param, requestHeaders);
+            var responseObject = new DuoAPIResponse<T>
+            {
+                RequestSuccess = clientResponse.IsSuccessStatusCode,
+                StatusCode = clientResponse.StatusCode
+            };
+            
+            // Try to read data from response
+            try
+            {
+                using var reader = new StreamReader(clientResponse.Content.ReadAsStream());
+                responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel<T>>(reader.ReadToEnd());
+            }
+            catch( Exception Ex )
+            {
+                throw new DuoException("A deserialisation error has occoured. See the inner exception for more details", Ex, clientResponse.StatusCode, clientResponse.IsSuccessStatusCode);
+            }
+            
+            return responseObject;
+        }
+        
+        /// <summary>
+        /// Perform a Duo API call, disregarding response data other than success state
+        /// To return response data, specify a model to deserialise the response into with T
+        /// </summary>
+        /// <param name="method">HTTP Method to </param>
+        /// <param name="path">The API path, excluding the host</param>
+        /// <param name="param">Parameters that make up the request</param>
+        /// <param name="date">The current date and time, used to authenticate
+        /// the API request. Typically, you should specify DateTime.UtcNow,
+        /// but if you do not wish to rely on the system-wide clock, you may
+        /// determine the current date/time by some other means.</param>
+        /// <param name="signatureType">The type of signature to use to sign the request</param>
+        /// <returns>Response model indicating status code and response data, if any</returns>
+        /// <exception name="DuoException">Exception on unexpected error that could not be returned as part of the response model</exception>
+        public async Task<DuoAPIResponse<T>> APICallAsync<T>(
+                HttpMethod method, 
+                string path, 
+                DuoRequestData? param = null, 
+                DateTime? date = null, 
+                DuoSignatureTypes signatureType = DuoSignatureTypes.Duo_SignatureTypeV5)
+        {
+            // Get request date
+            var requestDate = date ?? DateTime.UtcNow;
+            var serverRequestUri = new UriBuilder
+            {
+                Scheme = "https",
+                Host = host,
+                Path = path,
+                Port = -1
+            };
+
+            // Check signature
+            IDuoSignatureTypes DuoSignature;
+            if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV2 ) DuoSignature = new DuoSignatureV2(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV4 ) DuoSignature = new DuoSignatureV4(ikey, skey, host, requestDate);
+            else if( signatureType == DuoSignatureTypes.Duo_SignatureTypeV5 ) DuoSignature = new DuoSignatureV5(ikey, skey, host, requestDate);
+            else throw new DuoException("Invalid or unsupported signature type");
+            
+            // Except for POST,PUT and PATCH, put parameters in the URL
+            if( method != HttpMethod.Post && method != HttpMethod.Put && method != HttpMethod.Patch && param is DuoParamRequestData paramData )
+            {
+                var queryBuilder = new StringBuilder();
+                foreach( var (paramKey, paramValue) in paramData.RequestData )
+                {
+                    if( queryBuilder.Length != 0 ) queryBuilder.Append('&');
+                    queryBuilder.Append($"{HttpUtility.UrlEncode(paramKey)}={HttpUtility.UrlEncode(paramValue)}");
+                }
+                serverRequestUri.Query = queryBuilder.ToString();
+            }
+            
+            // Get request auth and send
+            var requestHeaders = DuoSignature.DefaultRequestHeaders;
+            var requestAuthentication = DuoSignature.SignRequest(method, path, requestDate, param, requestHeaders);
+            var clientResponse = await _SendHTTPRequestAsync(method, serverRequestUri.Uri, requestAuthentication, signatureType, param, requestHeaders);
+            var responseObject = new DuoAPIResponse<T>
+            {
+                RequestSuccess = clientResponse.IsSuccessStatusCode,
+                StatusCode = clientResponse.StatusCode
+            };
+            
+            // Try to read data from response
+            try
+            {
+                responseObject.ResponseData = JsonConvert.DeserializeObject<DuoResponseModel<T>>(await clientResponse.Content.ReadAsStringAsync());
+            }
+            catch( Exception Ex )
+            {
+                throw new DuoException("A deserialisation error has occoured. See the inner exception for more details", Ex, clientResponse.StatusCode, clientResponse.IsSuccessStatusCode);
+            }
+            
+            return responseObject;
+        }
+        #endregion Public Methods
+
+        #region Private Methods
+        /// <summary>
+        /// Send a HTTP request to the Duo Servers
+        /// </summary>
+        /// <param name="method">HTTP Request method</param>
+        /// <param name="url">The URL, excluding the host</param>
+        /// <param name="auth">The generated bearer auth token</param>
+        /// <param name="signatureType">The type of signature to use to sign the request</param>
+        /// <param name="bodyRequestData">Request data to be placed in the request body</param>
+        /// <param name="duoHeaders">Any additional headers to send with the request</param>
+        /// <returns>HttpResponseMessage</returns>
+        /// <exception cref="DuoException">If no data is provided for PUT or POST methods</exception>
+        /// <exception cref="HttpRequestException">Error on HttpRequest from dotnet</exception>
+        private HttpResponseMessage _SendHTTPRequest(HttpMethod method, Uri url, string auth, DuoSignatureTypes signatureType, DuoRequestData? bodyRequestData = null, Dictionary<string, string>? duoHeaders = null)
+        {
+            // Setup the HttpClient. There is no reason to permit anything other than TLS1.2 and 1.3 as the API endpoints don't accept it
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13 | SecurityProtocolType.Tls12;
+            var WebRequest = new HttpClient(new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = _ServerCertificateCustomValidationCallback,
+            });
+            
+            // Setup the request headers
+            WebRequest.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", auth);
+            WebRequest.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            WebRequest.DefaultRequestHeaders.UserAgent.ParseAdd(_FormatUserAgent(user_agent));
+            WebRequest.Timeout = RequestTimeout ?? WebRequest.Timeout;
+
+            // Add additional headers
+            if( duoHeaders != null )
+            {
+                foreach( var (header, value) in duoHeaders )
+                {
+                    WebRequest.DefaultRequestHeaders.Add(header, value);
+                }
+            }
+            
+            // Formulate the request message
+            var requestMessage = new HttpRequestMessage
+            {
+                Method = method,
+                RequestUri = url
+            };
+            
+            // Handle request data
+            if( method == HttpMethod.Post || method == HttpMethod.Put || method == HttpMethod.Patch )
+            {
+                if( signatureType is DuoSignatureTypes.Duo_SignatureTypeV4 or DuoSignatureTypes.Duo_SignatureTypeV5 )
+                {
+                    // requestData is JSON in the request body for Signature 4 and 5
+                    if( bodyRequestData is DuoJsonRequestData jsonData && !string.IsNullOrEmpty(jsonData.RequestData) )
                     {
-                        code = check.Value;
+                        requestMessage.Content = new StringContent(jsonData.RequestData, Encoding.UTF8, jsonData.ContentTypeHeader);
+                    }
+                    else if( bodyRequestData is DuoJsonRequestDataObject { RequestData: not null } jsonDataWithObject )
+                    {
+                        var jsonFormattingSettings = new JsonSerializerSettings
+                        {
+                            NullValueHandling = NullValueHandling.Ignore
+                        };
+                        
+                        requestMessage.Content = new StringContent(JsonConvert.SerializeObject(jsonDataWithObject.RequestData, jsonFormattingSettings), Encoding.UTF8, jsonDataWithObject.ContentTypeHeader);
                     }
                     else
                     {
-                        code = 0;
+                        throw new DuoException($"{method} specified but either DuoJsonRequestData was not provided or DuoJsonRequestData.RequestData was null or empty (And signaturetype was >=4)");
                     }
-                    String message_detail = "";
-                    if (dict.ContainsKey("message_detail"))
-                    {
-                        message_detail = dict["message_detail"] as string;
-                    }
-                    throw new ApiException(code,
-                                           (int)statusCode,
-                                           dict["message"] as string,
-                                           message_detail);
-                }
-            }
-            catch (ApiException)
-            {
-                throw;
-            }
-            catch (Exception e)
-            {
-                throw new BadResponseException((int)statusCode, e);
-            }
-        }
-
-        private Dictionary<string, object> DeserializeJsonToMixedDictionary(string json)
-        {
-            var sourceDict = JsonSerializer.Deserialize
-                <Dictionary<string, JsonElement>>(json);
-            var targetDict = new Dictionary<string, object>();
-            foreach (var kvp in sourceDict)
-            {
-                targetDict.Add(kvp.Key, kvp.Value.ConvertToObject());
-            }
-            return targetDict;
-        }
-
-        public T JSONApiCall<T>(string method,
-                                string path,
-                                Dictionary<string, string> parameters)
-            where T : class
-        {
-            return JSONApiCall<T>(method, path, parameters, 0, DateTime.UtcNow);
-        }
-
-        /// <param name="timeout">The request timeout, in milliseconds.
-        /// Specify 0 to use the system-default timeout. Use caution if
-        /// you choose to specify a custom timeout - some API
-        /// calls (particularly in the Auth APIs) will not
-        /// return a response until an out-of-band authentication process
-        /// has completed. In some cases, this may take as much as a
-        /// small number of minutes.</param>
-        public T JSONApiCall<T>(string method,
-                                string path,
-                                Dictionary<string, string> parameters,
-                                int timeout)
-            where T : class
-        {
-            return JSONApiCall<T>(method, path, parameters, timeout, DateTime.UtcNow);
-        }
-
-        /// <param name="date">The current date and time, used to authenticate
-        /// the API request. Typically, you should specify DateTime.UtcNow,
-        /// but if you do not wish to rely on the system-wide clock, you may
-        /// determine the current date/time by some other means.</param>
-        /// <param name="timeout">The request timeout, in milliseconds.
-        /// Specify 0 to use the system-default timeout. Use caution if
-        /// you choose to specify a custom timeout - some API
-        /// calls (particularly in the Auth APIs) will not
-        /// return a response until an out-of-band authentication process
-        /// has completed. In some cases, this may take as much as a
-        /// small number of minutes.</param>
-        public T JSONApiCall<T>(string method,
-                                string path,
-                                Dictionary<string, string> parameters,
-                                int timeout,
-                                DateTime date)
-            where T : class
-        {
-            var dict = BaseJSONApiCall(method, path, parameters, timeout, date);
-            return dict["response"] as T;
-        }
-
-        public Dictionary<string, object> JSONPagingApiCall(string method,
-                               string path,
-                               Dictionary<string, string> parameters,
-                               int offset,
-                               int limit)
-        {
-            return JSONPagingApiCall(method, path, parameters, offset, limit, 0, DateTime.UtcNow);
-        }
-
-        /// <param name="date">The current date and time, used to authenticate
-        /// the API request. Typically, you should specify DateTime.UtcNow,
-        /// but if you do not wish to rely on the system-wide clock, you may
-        /// determine the current date/time by some other means.</param>
-        /// <param name="timeout">The request timeout, in milliseconds.
-        /// Specify 0 to use the system-default timeout. Use caution if
-        /// you choose to specify a custom timeout - some API
-        /// calls (particularly in the Auth APIs) will not
-        /// return a response until an out-of-band authentication process
-        /// has completed. In some cases, this may take as much as a
-        /// small number of minutes.</param>
-        /// <param name="offset">The offset of the first record in the next
-        /// page of results within the total result set.</param>
-        /// <param name="limit">The number of records you would like returned
-        /// with this request.  The service is free to return a different
-        /// number.  You should use the 'next_offset' from the returned
-        /// metadata to pick the offset for the next page.</param>
-        /// return a JSON dictionary with top level keys: stat, response, metadata.
-        /// The actual requested data is in 'response'.  'metadata' contains a
-        /// 'next_offset' key which should be used to fetch the next page.
-        public Dictionary<string, object> JSONPagingApiCall(string method,
-                                string path,
-                                Dictionary<string, string> parameters,
-                                int offset,
-                                int limit,
-                                int timeout,
-                                DateTime date)
-        {
-            // copy parameters so we don't cause any side-effects
-            parameters = new Dictionary<string, string>(parameters);
-            parameters["offset"] = offset.ToString(); // overrides caller value
-            parameters["limit"] = limit.ToString();
-
-            return this.BaseJSONApiCall(method, path, parameters, timeout, date);
-        }
-
-
-        /// Helper to format a User-Agent string with some information about
-        /// the operating system / .NET runtime
-        /// <param name="product_name">e.g. "FooClient/1.0"</param>
-        public static string FormatUserAgent(string product_name)
-        {
-            return String.Format(
-                 "{0} ({1}; .NET {2})", product_name, System.Environment.OSVersion,
-                 System.Environment.Version);
-        }
-
-        #region Private Methods
-        private string HmacSign(string data)
-        {
-            byte[] key_bytes = ASCIIEncoding.ASCII.GetBytes(this.skey);
-            HMACSHA512 hmac = new HMACSHA512(key_bytes);
-
-            byte[] data_bytes = ASCIIEncoding.ASCII.GetBytes(data);
-            hmac.ComputeHash(data_bytes);
-
-            string hex = BitConverter.ToString(hmac.Hash);
-            return hex.Replace("-", "").ToLower();
-        }
-
-        private static string Encode64(string plaintext)
-        {
-            byte[] plaintext_bytes = ASCIIEncoding.ASCII.GetBytes(plaintext);
-            string encoded = System.Convert.ToBase64String(plaintext_bytes);
-            return encoded;
-        }
-
-        private static string DateToRFC822(DateTime date)
-        {
-            // Can't use the "zzzz" format because it adds a ":"
-            // between the offset's hours and minutes.
-            string date_string = date.ToString(
-                "ddd, dd MMM yyyy HH:mm:ss", CultureInfo.InvariantCulture);
-            int offset = 0;
-            // set offset if input date is not UTC time.
-            if (date.Kind != DateTimeKind.Utc)
-            {
-                offset = TimeZoneInfo.Local.GetUtcOffset(date).Hours;
-            }
-            string zone;
-            // + or -, then 0-pad, then offset, then more 0-padding.
-            if (offset < 0)
-            {
-                offset *= -1;
-                zone = "-";
-            }
-            else
-            {
-                zone = "+";
-            }
-            zone += offset.ToString(CultureInfo.InvariantCulture).PadLeft(2, '0');
-            date_string += " " + zone.PadRight(5, '0');
-            return date_string;
-        }
-
-        /// <summary>
-        /// Gets the WinHTTP proxy.
-        /// </summary>
-        /// <remarks>
-        /// Normally, C# picks up these proxy settings by default, but when run under the SYSTEM account, it does not.
-        /// </remarks>
-        /// <returns></returns>
-        private static System.Net.WebProxy GetWinhttpProxy()
-        {
-            string[] proxyServerNames = null;
-            string primaryProxyServer = null;
-            string[] bypassHostnames = null;
-            bool enableLocalBypass = false;
-            System.Net.WebProxy winhttpProxy = null;
-
-            // Has a proxy been configured?
-            // No.  Is a WinHTTP proxy set?
-            int internetHandle = WinHttpOpen("DuoTest", WinHttp_Access_Type.WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, null, null, 0);
-            if (internetHandle != 0)
-            {
-                // Yes, use it.  This is normal when run under the SYSTEM account and a WinHTTP proxy is configured.  When run as a normal user,
-                // the Proxy property will already be configured correctly.  To resolve this for SYSTEM, manually read proxy settings and configure.
-                var proxyInfo = new WINHTTP_PROXY_INFO();
-                WinHttpGetDefaultProxyConfiguration(proxyInfo);
-                if (proxyInfo.lpszProxy != null)
-                {
-                    if (proxyInfo.lpszProxy != null)
-                    {
-                        proxyServerNames = proxyInfo.lpszProxy.Split(new char[] { ' ', '\t', ';' });
-                        if ((proxyServerNames == null) || (proxyServerNames.Length == 0))
-                            primaryProxyServer = proxyInfo.lpszProxy;
-                        else
-                            primaryProxyServer = proxyServerNames[0];
-                    }
-                    if (proxyInfo.lpszProxyBypass != null)
-                    {
-                        bypassHostnames = proxyInfo.lpszProxyBypass.Split(new char[] { ' ', '\t', ';' });
-                        if ((bypassHostnames == null) || (bypassHostnames.Length == 0))
-                            bypassHostnames = new string[] { proxyInfo.lpszProxyBypass };
-                        if (bypassHostnames != null)
-                            enableLocalBypass = bypassHostnames.Contains("local", StringComparer.InvariantCultureIgnoreCase);
-                    }
-                    if (primaryProxyServer != null)
-                        winhttpProxy = new System.Net.WebProxy(proxyServerNames[0], enableLocalBypass, bypassHostnames);
-                }
-                WinHttpCloseHandle(internetHandle);
-                internetHandle = 0;
-            }
-            else
-            {
-                throw new Exception(String.Format("WinHttp init failed {0}", System.Runtime.InteropServices.Marshal.GetLastWin32Error()));
-            }
-
-            return winhttpProxy;
-        }
-
-        /// <summary>
-        /// Determines if the specified web request is using a proxy server.
-        /// </summary>
-        /// <remarks>
-        /// If no proxy is set, the Proxy member is typically non-null and set to an object type that includes but hides IWebProxy with no address,
-        /// so it cannot be inspected.  Resolving this requires reflection to extract the hidden webProxy object and check it's Address member.
-        /// </remarks>
-        /// <param name="requestObject">Request to check</param>
-        /// <returns>TRUE if a proxy is in use, else FALSE</returns>
-        public static bool HasProxyServer(HttpWebRequest requestObject)
-        {
-            WebProxy actualProxy = null;
-            bool hasProxyServer = false;
-
-            if (requestObject.Proxy != null)
-            {
-                // WebProxy is described as the base class for IWebProxy, so we should always see this type as the field is initialized by the framework.
-                if (!(requestObject.Proxy is WebProxy))
-                {
-                    var webProxyField = requestObject.Proxy.GetType().GetField("webProxy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
-                    if (webProxyField != null)
-                        actualProxy = webProxyField.GetValue(requestObject.Proxy) as WebProxy;
                 }
                 else
                 {
-                    actualProxy = requestObject.Proxy as WebProxy;
+                    // requestData is FormUrl encoded in the request body for Signature 2
+                    if( bodyRequestData is DuoParamRequestData paramData )
+                    {
+                        requestMessage.Content = new FormUrlEncodedContent(paramData.RequestData);
+                    }
+                    else
+                    {
+                        throw new DuoException($"{method} specified but either DuoParamRequestData was not provided or DuoParamRequestData.RequestData was null (And signaturetype was <4)");
+                    }
                 }
-                hasProxyServer = (actualProxy.Address != null);
             }
-            else
+            
+            // Make request and send response back to parent
+            return WebRequest.Send(requestMessage);
+        }
+        
+        /// <summary>
+        /// Send a async HTTP request to the Duo Servers
+        /// </summary>
+        /// <param name="method">HTTP Request method</param>
+        /// <param name="url">The URL, excluding the host</param>
+        /// <param name="auth">The generated bearer auth token</param>
+        /// <param name="signatureType">The type of signature to use to sign the request</param>
+        /// <param name="bodyRequestData">Request data to be placed in the request body</param>
+        /// <param name="duoHeaders">Any additional headers to send with the request</param>
+        /// <returns>HttpResponseMessage</returns>
+        /// <exception cref="DuoException">If no data is provided for PUT or POST methods</exception>
+        /// <exception cref="HttpRequestException">Error on HttpRequest from dotnet</exception>
+        private async Task<HttpResponseMessage> _SendHTTPRequestAsync(HttpMethod method, Uri url, string auth, DuoSignatureTypes signatureType, DuoRequestData? bodyRequestData = null, Dictionary<string, string>? duoHeaders = null)
+        {
+            // Setup the HttpClient. There is no reason to permit anything other than TLS1.2 and 1.3 as the API endpoints don't accept it
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13 | SecurityProtocolType.Tls12;
+            var WebRequest = new HttpClient(new HttpClientHandler
             {
-                hasProxyServer = false;
+                ServerCertificateCustomValidationCallback = _ServerCertificateCustomValidationCallback,
+            });
+            
+            // Setup the request headers
+            WebRequest.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", auth);
+            WebRequest.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            WebRequest.DefaultRequestHeaders.UserAgent.ParseAdd(_FormatUserAgent(user_agent));
+            WebRequest.Timeout = RequestTimeout ?? WebRequest.Timeout;
+            
+            // Add additional headers
+            if( duoHeaders != null )
+            {
+                foreach( var (header, value) in duoHeaders )
+                {
+                    WebRequest.DefaultRequestHeaders.Add(header, value);
+                }
+            }
+            
+            // Formulate the request message
+            var requestMessage = new HttpRequestMessage
+            {
+                Method = method,
+                RequestUri = url
+            };
+            
+            // Handle request data
+            if( method == HttpMethod.Post || method == HttpMethod.Put || method == HttpMethod.Patch )
+            {
+                if( signatureType is DuoSignatureTypes.Duo_SignatureTypeV4 or DuoSignatureTypes.Duo_SignatureTypeV5 )
+                {
+                    // requestData is JSON in the request body for Signature 4 and 5
+                    if( bodyRequestData is DuoJsonRequestData jsonData && !string.IsNullOrEmpty(jsonData.RequestData) )
+                    {
+                        requestMessage.Content = new StringContent(jsonData.RequestData, Encoding.UTF8, jsonData.ContentTypeHeader);
+                    }
+                    else if( bodyRequestData is DuoJsonRequestDataObject { RequestData: not null } jsonDataWithObject )
+                    {
+                        var jsonFormattingSettings = new JsonSerializerSettings
+                        {
+                            NullValueHandling = NullValueHandling.Ignore
+                        };
+                        
+                        requestMessage.Content = new StringContent(JsonConvert.SerializeObject(jsonDataWithObject.RequestData, jsonFormattingSettings), Encoding.UTF8, jsonDataWithObject.ContentTypeHeader);
+                    }
+                    else
+                    {
+                        throw new DuoException($"{method} specified but either DuoJsonRequestData was not provided or DuoJsonRequestData.RequestData was null or empty (And signaturetype was >=4)");
+                    }
+                }
+                else
+                {
+                    // requestData is FormUrl encoded in the request body for Signature 2
+                    if( bodyRequestData is DuoParamRequestData paramData )
+                    {
+                        requestMessage.Content = new FormUrlEncodedContent(paramData.RequestData);
+                    }
+                    else
+                    {
+                        throw new DuoException($"{method} specified but either DuoParamRequestData was not provided or DuoParamRequestData.RequestData was null (And signaturetype was <4)");
+                    }
+                }
             }
 
-            return hasProxyServer;
+            // Make request and send response back to parent
+            return await WebRequest.SendAsync(requestMessage);
+        }
+
+        /// <summary>
+        /// Validate the server certificate
+        /// </summary>
+        private bool _ServerCertificateCustomValidationCallback(HttpRequestMessage arg1, X509Certificate2? arg2, X509Chain? arg3, SslPolicyErrors arg4)
+        {
+            #if DEBUG
+            // Check if certificate validation is enabled
+            if( !_TLSCertificateValidation )
+            {
+                return true;
+            }
+            #endif
+            
+            // Get the certificates
+            var CertificateValidation =  ( CustomRootCertificates != null )
+                ? CertificatePinnerFactory.GetCustomRootCertificatesPinner(CustomRootCertificates)
+                : CertificatePinnerFactory.GetDuoCertificatePinner();
+                
+            // Perform cert validation
+            return CertificateValidation(arg1, arg2, arg3, arg4);
+        }
+        
+        /// Helper to format a User-Agent string with some information about
+        /// the operating system / .NET runtime
+        /// <param name="product_name">e.g. "FooClient/1.0"</param>
+        private string _FormatUserAgent(string product_name)
+        {
+            return $"{product_name} ({Environment.OSVersion}; .NET {Environment.Version})";
         }
         #endregion Private Methods
-
-        #region Private DllImport
-        private enum WinHttp_Access_Type
-        {
-            WINHTTP_ACCESS_TYPE_DEFAULT_PROXY = 0,
-            WINHTTP_ACCESS_TYPE_NO_PROXY = 1,
-            WINHTTP_ACCESS_TYPE_NAMED_PROXY = 3,
-            /// <summary>
-            /// Undocumented; supported on Win8.1+ per NET framework source.
-            /// </summary>
-            WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY = 4
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private class WINHTTP_PROXY_INFO
-        {
-            public int dwAccessType;
-            [MarshalAs(UnmanagedType.LPWStr)]
-            public string lpszProxy;
-            [MarshalAs(UnmanagedType.LPWStr)]
-            public string lpszProxyBypass;
-        }
-        [DllImport("winhttp.dll", CharSet = CharSet.Unicode)]
-        private static extern bool WinHttpGetDefaultProxyConfiguration([In, Out] WINHTTP_PROXY_INFO proxyInfo);
-
-        [DllImport("winhttp.dll", CharSet = CharSet.Unicode)]
-        private static extern int WinHttpOpen([MarshalAs(UnmanagedType.LPWStr)] string pwszUserAgent,
-          WinHttp_Access_Type dwAccessType,
-          [MarshalAs(UnmanagedType.LPWStr)] string pwszProxyName,
-          [MarshalAs(UnmanagedType.LPWStr)] string pwszProxyBypass,
-          int dwFlags);
-
-        [DllImport("winhttp.dll", CharSet = CharSet.Unicode)]
-        private static extern bool WinHttpCloseHandle(int hInternet);
-        #endregion Private DllImport
-    }
- 
-    [Serializable]
-    public class DuoException : Exception
-    {
-        public int HttpStatus { get; private set; }
-
-        public DuoException(int http_status, string message, Exception inner)
-            : base(message, inner)
-        {
-            this.HttpStatus = http_status;
-        }
-
-        protected DuoException(System.Runtime.Serialization.SerializationInfo info,
-                               System.Runtime.Serialization.StreamingContext ctxt)
-            : base(info, ctxt)
-        { }
-    }
-
-    [Serializable]
-    public class ApiException : DuoException
-    {
-        public int Code { get; private set; }
-        public string ApiMessage { get; private set; }
-        public string ApiMessageDetail { get; private set; }
-
-        public ApiException(int code,
-                            int http_status,
-                            string api_message,
-                            string api_message_detail)
-            : base(http_status, FormatMessage(code, api_message, api_message_detail), null)
-        {
-            this.Code = code;
-            this.ApiMessage = api_message;
-            this.ApiMessageDetail = api_message_detail;
-        }
-
-        protected ApiException(System.Runtime.Serialization.SerializationInfo info,
-                               System.Runtime.Serialization.StreamingContext ctxt)
-            : base(info, ctxt)
-        { }
-
-        private static string FormatMessage(int code,
-                                            string api_message,
-                                            string api_message_detail)
-        {
-            return String.Format(
-                "Duo API Error {0}: '{1}' ('{2}')", code, api_message, api_message_detail);
-        }
-    }
-
-    [Serializable]
-    public class BadResponseException : DuoException
-    {
-        public BadResponseException(int http_status, Exception inner)
-            : base(http_status, FormatMessage(http_status, inner), inner)
-        { }
-
-        protected BadResponseException(System.Runtime.Serialization.SerializationInfo info,
-                                       System.Runtime.Serialization.StreamingContext ctxt)
-            : base(info, ctxt)
-        { }
-
-        private static string FormatMessage(int http_status, Exception inner)
-        {
-            string inner_message = "(null)";
-            if (inner != null)
-            {
-                inner_message = String.Format("'{0}'", inner.Message);
-            }
-            return String.Format(
-                "Got error {0} with HTTP Status {1}", inner_message, http_status);
-        }
-    }
-
-    public interface SleepService
-    {
-        void Sleep(int ms);
-    }
-
-    public interface RandomService
-    {
-        int GetInt(int maxInt);
-    }
-
-    class ThreadSleepService : SleepService
-    {
-        public void Sleep(int ms)
-        {
-            System.Threading.Thread.Sleep(ms);
-        }
-    }
-
-    class SystemRandomService : RandomService
-    {
-        private Random rand = new Random();
-
-        public int GetInt(int maxInt)
-        {
-            return rand.Next(maxInt);
-        }
     }
 }

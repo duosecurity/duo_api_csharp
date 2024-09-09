@@ -12,47 +12,24 @@ jobs:
 # Build and test on .NET Core
   dotnet-core-ci:
     name: .NET Core - test
-    runs-on: windows-2022
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v1.7.2
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-version: '8.0.x'
 
       - name: Install dependencies
-        run: nuget restore
+        run: dotnet restore
 
       - name: Build solution
-        run: dotnet build
+        run: dotnet build --configuration Release --no-restore
 
       - name: Run tests
-        run: dotnet test
+        run: dotnet test --no-restore --verbosity normal --logger:"trx;LogFileName=TestResults.xml"
 
       # - name: Run linter
       #   run: dotnet format --verify-no-changes
-
-  # Build and test on .NET Framework
-  dotnet-framework-ci:
-    name: .NET Framework - test
-    runs-on: windows-2022
-
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@v1
-
-      - name: Set up VSTest
-        uses: darenm/Setup-VSTest@v1
-
-      - name: Install dependencies
-        run: nuget restore
-
-      - name: Build DuoApiTest solution
-        run: msbuild.exe duo_api_csharp.sln
-
-      - name: Run Tests dll
-        run: vstest.console.exe .\test\bin\Debug\DuoApiTest.dll

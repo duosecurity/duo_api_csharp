@@ -13,3 +13,5 @@ packages/
 
 *.ncrunchsolution
 _NCrunch_*/
+.idea
+.DS_Store
