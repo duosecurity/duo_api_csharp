@@ -21,22 +21,25 @@ namespace duo_api_csharp.SignatureTypes
         {
             { "X-Duo-Date", requesttime.DateToRFC822() }
         };
-
+        
         public string SignRequest(HttpMethod method, string path, DateTime requestDate, DuoRequestData? requestData, Dictionary<string, string>? requestHeaders)
         {
-            // Format data for signature
+            // Return HMAC signature for request
+            var signature = _GenerateSignature(method, path, requestDate, requestData, requestHeaders);
+            var auth = $"{ikey}:{_HmacSign($"{signature}")}";
+            return _Encode64(auth);
+        }
+        
+        internal string _GenerateSignature(HttpMethod method, string path, DateTime requestDate, DuoRequestData? requestData, Dictionary<string, string>? requestHeaders)
+        {
             var signingHeader = $"{requestDate.DateToRFC822()}\n{method.Method.ToUpper()}\n{host}\n{path}";
-            var signingParams = new StringBuilder();
+            var signingParams = "";
             var bodyData = "";
             
             // Check request data for signing
             if( requestData is DuoParamRequestData paramData )
             {
-                foreach( var (paramKey, paramValue) in paramData.RequestData.OrderBy(q => q.Key) )
-                {
-                    if( signingParams.Length != 0 ) signingParams.Append('&');
-                    signingParams.Append($"{Uri.EscapeDataString(paramKey)}={Uri.EscapeDataString(paramValue)}");
-                }
+                signingParams = _CanonParams(paramData);
             }
             else if( requestData is DuoJsonRequestData jsonData )
             {
@@ -56,21 +59,39 @@ namespace duo_api_csharp.SignatureTypes
             var signingHeaders = new StringBuilder();
             if( requestHeaders != null )
             {
-                foreach( var (paramKey, paramValue) in requestHeaders )
+                lock( _AddedHeaders) 
                 {
-                    if( !_ValidateHeader(paramKey, paramValue) ) continue;
-                    _AddedHeaders.Add(paramKey.ToLower());
+                    foreach( var (paramKey, paramValue) in requestHeaders )
+                    {
+                        if( !_ValidateHeader(paramKey, paramValue) ) continue;
+                        _AddedHeaders.Add(paramKey.ToLower());
+                        
+                        if( signingHeaders.Length != 0 ) signingHeaders.Append('\x00');
+                        signingHeaders.Append(paramKey.ToLower());
+                        signingHeaders.Append('\x00');
+                        signingHeaders.Append(paramValue);
+                    }
                     
-                    if( signingHeaders.Length != 0 ) signingHeaders.Append('\x00');
-                    signingHeaders.Append(paramKey.ToLower());
-                    signingHeaders.Append('\x00');
-                    signingHeaders.Append(paramValue);
-                } 
+                    _AddedHeaders.Clear();
+                }
             }
             
-            // Return HMAC signature for request
-            var auth = $"{ikey}:{_HmacSign($"{signingHeader}\n{signingParams}\n{_Sha512Hash(bodyData)}\n{_Sha512Hash(signingHeaders.ToString())}")}";
-            return _Encode64(auth);
+            return $"{signingHeader}\n{signingParams}\n{_Sha512Hash(bodyData)}\n{_Sha512Hash(signingHeaders.ToString())}";
+        }
+        
+        internal string _CanonParams(DuoRequestData? requestData)
+        {
+            var signingParams = new StringBuilder();
+            if( requestData is DuoParamRequestData data )
+            {
+                foreach( var (paramKey, paramValue) in data.RequestData.OrderBy(q => Uri.EscapeDataString(q.Key)) )
+                {
+                    if( signingParams.Length != 0 ) signingParams.Append('&');
+                    signingParams.Append($"{Uri.EscapeDataString(paramKey)}={Uri.EscapeDataString(paramValue)}");
+                }
+            }
+            
+            return signingParams.ToString();
         }
         
         private string? _HmacSign(string data)
