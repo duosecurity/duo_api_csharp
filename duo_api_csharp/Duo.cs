@@ -462,6 +462,10 @@ namespace duo_api_csharp
                         
                         requestMessage.Content = new StringContent(JsonConvert.SerializeObject(jsonDataWithObject.RequestData, jsonFormattingSettings), Encoding.UTF8, jsonDataWithObject.ContentTypeHeader);
                     }
+                    else if( bodyRequestData is DuoParamRequestData paramData )
+                    {
+                        requestMessage.Content = new FormUrlEncodedContent(paramData.RequestData);
+                    }
                     else
                     {
                         throw new DuoException($"{method} specified but either DuoJsonRequestData was not provided or DuoJsonRequestData.RequestData was null or empty (And signaturetype was >=4)");
