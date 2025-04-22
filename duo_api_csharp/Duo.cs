@@ -24,7 +24,7 @@ namespace Duo
 {
     public class DuoApi
     {
-        public string DEFAULT_AGENT = "DuoAPICSharp/1.0";
+        public string DEFAULT_AGENT = "DuoAPICSharp/1.1.0";
 
         private const int INITIAL_BACKOFF_MS = 1000;
         private const int MAX_BACKOFF_MS = 32000;
