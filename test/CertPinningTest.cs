@@ -72,7 +72,7 @@ public class CertPinningTest : CertPinningTestBase
     [Fact]
     public void TestReadCertFile()
     {
-        Assert.Equal(10, CertificatePinnerFactory.ReadCertsFromFile().Length);
+        Assert.Equal(15, CertificatePinnerFactory.ReadCertsFromFile().Length);
     }
 
     [Fact]
