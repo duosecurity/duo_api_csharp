@@ -158,3 +158,70 @@ public class CertDisablingTest : CertPinningTestBase
         Assert.True(pinner(null, DuoApiServerCert(), MicrosoftComChain(), SslPolicyErrors.None));
     }
 }
+
+public class OsTrustStoreValidatorTest : CertPinningTestBase
+{
+    private RemoteCertificateValidationCallback validator;
+
+    public OsTrustStoreValidatorTest()
+    {
+        validator = CertificatePinnerFactory.GetOsTrustStoreValidator();
+    }
+
+    [Fact]
+    public void TestSuccess()
+    {
+        // A chain that passed the platform's default validation is accepted,
+        // even though it is not one of Duo's pinned roots.
+        Assert.True(validator(null, DuoApiServerCert(), DuoApiChain(), SslPolicyErrors.None));
+    }
+
+    [Fact]
+    public void TestUnpinnedRootAccepted()
+    {
+        // Pinning is disabled, so a valid non-Duo root (which the Duo pinner would
+        // reject) is accepted as long as TLS validation itself succeeded.
+        Assert.True(validator(null, CertFromString(MICROSOFT_COM_CERT_SERVER), MicrosoftComChain(), SslPolicyErrors.None));
+    }
+
+    [Fact]
+    public void TestFatalSslError()
+    {
+        // TLS is still enforced: any SSL policy error rejects the connection.
+        Assert.False(validator(null, DuoApiServerCert(), DuoApiChain(), SslPolicyErrors.RemoteCertificateNameMismatch));
+    }
+
+    [Fact]
+    public void TestChainErrorRejected()
+    {
+        Assert.False(validator(null, DuoApiServerCert(), DuoApiChain(), SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+
+    [Fact]
+    public void TestNoCertificateRejected()
+    {
+        Assert.False(validator(null, null, null, SslPolicyErrors.RemoteCertificateNotAvailable));
+    }
+}
+
+public class DisableCaPinningConfigTest
+{
+    [Fact]
+    public void TestCustomRootsWithPinningDisabledThrows()
+    {
+        var api = new DuoApi("ikey", "skey", "example.com", null, disableCaPinning: true);
+        var customRoots = new X509Certificate2Collection();
+
+        Assert.Throws<InvalidOperationException>(() => api.UseCustomRootCertificates(customRoots));
+    }
+
+    [Fact]
+    public void TestCustomRootsWithPinningEnabledSucceeds()
+    {
+        var api = new DuoApi("ikey", "skey", "example.com", null, disableCaPinning: false);
+        var customRoots = new X509Certificate2Collection();
+
+        // Should not throw and should return the client for chaining.
+        Assert.Same(api, api.UseCustomRootCertificates(customRoots));
+    }
+}

@@ -38,6 +38,7 @@ namespace Duo
         private SleepService sleepService;
         private RandomService randomService;
         private bool sslCertValidation = true;
+        private bool caPinningEnabled = true;
         private X509CertificateCollection customRoots = null;
         
         // TLS 1.0/1.1 deprecation effective June 30, 2023
@@ -67,12 +68,25 @@ namespace Duo
         /// <param name="host">Application secret key</param>
         /// <param name="user_agent">HTTP client User-Agent</param>
         public DuoApi(string ikey, string skey, string host, string user_agent)
-            : this(ikey, skey, host, user_agent, "https", new ThreadSleepService(), new SystemRandomService())
+            : this(ikey, skey, host, user_agent, false)
+        {
+        }
+
+        /// <param name="ikey">Duo integration key</param>
+        /// <param name="skey">Duo secret key</param>
+        /// <param name="host">Application secret key</param>
+        /// <param name="user_agent">HTTP client User-Agent</param>
+        /// <param name="disableCaPinning">When true, disables Duo CA certificate pinning.
+        /// TLS is still enforced: connections are validated against the operating system
+        /// trust store instead of Duo's pinned root certificates. When false (the default),
+        /// the existing certificate pinning behavior is used.</param>
+        public DuoApi(string ikey, string skey, string host, string user_agent, bool disableCaPinning)
+            : this(ikey, skey, host, user_agent, "https", new ThreadSleepService(), new SystemRandomService(), disableCaPinning)
         {
         }
 
         protected DuoApi(string ikey, string skey, string host, string user_agent, string url_scheme,
-                SleepService sleepService, RandomService randomService)
+                SleepService sleepService, RandomService randomService, bool disableCaPinning = false)
         {
             this.ikey = ikey;
             this.skey = skey;
@@ -80,6 +94,7 @@ namespace Duo
             this.url_scheme = url_scheme;
             this.sleepService = sleepService;
             this.randomService = randomService;
+            this.caPinningEnabled = !disableCaPinning;
             if (String.IsNullOrEmpty(user_agent))
             {
                 this.user_agent = FormatUserAgent(DEFAULT_AGENT);
@@ -105,13 +120,20 @@ namespace Duo
 
         /// <summary>
         /// Override the set of Duo root certificates used for certificate pinning.  Provide a collection of acceptable root certificates.
-        /// 
-        /// Incompatible with DisableSslCertificateValidation - if that is enabled, certificate pinning is not done at all. 
+        ///
+        /// Incompatible with DisableSslCertificateValidation - if that is enabled, certificate pinning is not done at all.
+        /// Incompatible with disabling CA pinning - custom root certificates are a form of pinning and cannot be used when pinning is disabled.
         /// </summary>
         /// <param name="customRoots">The custom set of root certificates to trust</param>
         /// <returns>The DuoApi</returns>
         public DuoApi UseCustomRootCertificates(X509CertificateCollection customRoots)
         {
+            if (!caPinningEnabled)
+            {
+                throw new InvalidOperationException(
+                    "Cannot use custom root certificates when CA pinning is disabled. " +
+                    "Custom root certificates are a form of pinning; disable one or the other, not both.");
+            }
             this.customRoots = customRoots;
             return this;
         }
@@ -330,6 +352,13 @@ namespace Duo
             if (customRoots != null)
             {
                 return CertificatePinnerFactory.GetCustomRootCertificatesPinner(customRoots);
+            }
+
+            if (!caPinningEnabled)
+            {
+                // CA pinning disabled: TLS is still enforced, but validation is
+                // delegated to the OS trust store rather than Duo's pinned roots.
+                return CertificatePinnerFactory.GetOsTrustStoreValidator();
             }
 
             return CertificatePinnerFactory.GetDuoCertificatePinner();

@@ -49,6 +49,17 @@ namespace Duo
             return (httpRequestMessage, certificate, chain, sslPolicyErrors) => true;
         }
 
+        /// <summary>
+        /// Get a validator that disables certificate pinning while still enforcing TLS
+        /// verification via the OS trust store. The connection is allowed only when the
+        /// certificate chain passes the platform's default validation (no SSL policy errors).
+        /// </summary>
+        /// <returns>A validator that relies on the OS trust store for use in an HttpWebRequest</returns>
+        public static RemoteCertificateValidationCallback GetOsTrustStoreValidator()
+        {
+            return (httpRequestMessage, certificate, chain, sslPolicyErrors) => sslPolicyErrors == SslPolicyErrors.None;
+        }
+
         internal RemoteCertificateValidationCallback GetPinner()
         {
             return PinCertificate;
