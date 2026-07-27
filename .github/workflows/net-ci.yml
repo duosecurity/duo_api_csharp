@@ -15,10 +15,10 @@ jobs:
     runs-on: windows-2022
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v1.7.2
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
 
@@ -40,10 +40,10 @@ jobs:
     runs-on: windows-2022
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@v1
+        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
 
       - name: Set up VSTest
         uses: darenm/Setup-VSTest@v1
