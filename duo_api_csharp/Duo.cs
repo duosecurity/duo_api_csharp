@@ -38,6 +38,7 @@ namespace Duo
         private SleepService sleepService;
         private RandomService randomService;
         private bool sslCertValidation = true;
+        private bool caPinningEnabled = true;
         private X509CertificateCollection customRoots = null;
         
         // TLS 1.0/1.1 deprecation effective June 30, 2023
@@ -104,14 +105,36 @@ namespace Duo
         }
 
         /// <summary>
+        /// Disables Duo CA certificate pinning for the API calls the client makes.
+        /// TLS is still enforced: connections are validated against the operating system
+        /// trust store instead of Duo's pinned root certificates.
+        ///
+        /// Incompatible with UseCustomRootCertificates - custom root certificates are a
+        /// form of pinning and cannot be used when pinning is disabled.
+        /// </summary>
+        /// <returns>The DuoApi</returns>
+        public DuoApi DisableCaPinning()
+        {
+            caPinningEnabled = false;
+            return this;
+        }
+
+        /// <summary>
         /// Override the set of Duo root certificates used for certificate pinning.  Provide a collection of acceptable root certificates.
-        /// 
-        /// Incompatible with DisableSslCertificateValidation - if that is enabled, certificate pinning is not done at all. 
+        ///
+        /// Incompatible with DisableSslCertificateValidation - if that is enabled, certificate pinning is not done at all.
+        /// Incompatible with disabling CA pinning - custom root certificates are a form of pinning and cannot be used when pinning is disabled.
         /// </summary>
         /// <param name="customRoots">The custom set of root certificates to trust</param>
         /// <returns>The DuoApi</returns>
         public DuoApi UseCustomRootCertificates(X509CertificateCollection customRoots)
         {
+            if (!caPinningEnabled)
+            {
+                throw new InvalidOperationException(
+                    "Cannot use custom root certificates when CA pinning is disabled. " +
+                    "Custom root certificates are a form of pinning; disable one or the other, not both.");
+            }
             this.customRoots = customRoots;
             return this;
         }
@@ -330,6 +353,13 @@ namespace Duo
             if (customRoots != null)
             {
                 return CertificatePinnerFactory.GetCustomRootCertificatesPinner(customRoots);
+            }
+
+            if (!caPinningEnabled)
+            {
+                // CA pinning disabled: TLS is still enforced, but validation is
+                // delegated to the OS trust store rather than Duo's pinned roots.
+                return CertificatePinnerFactory.GetOsTrustStoreValidator();
             }
 
             return CertificatePinnerFactory.GetDuoCertificatePinner();
