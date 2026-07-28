@@ -68,25 +68,12 @@ namespace Duo
         /// <param name="host">Application secret key</param>
         /// <param name="user_agent">HTTP client User-Agent</param>
         public DuoApi(string ikey, string skey, string host, string user_agent)
-            : this(ikey, skey, host, user_agent, false)
-        {
-        }
-
-        /// <param name="ikey">Duo integration key</param>
-        /// <param name="skey">Duo secret key</param>
-        /// <param name="host">Application secret key</param>
-        /// <param name="user_agent">HTTP client User-Agent</param>
-        /// <param name="disableCaPinning">When true, disables Duo CA certificate pinning.
-        /// TLS is still enforced: connections are validated against the operating system
-        /// trust store instead of Duo's pinned root certificates. When false (the default),
-        /// the existing certificate pinning behavior is used.</param>
-        public DuoApi(string ikey, string skey, string host, string user_agent, bool disableCaPinning)
-            : this(ikey, skey, host, user_agent, "https", new ThreadSleepService(), new SystemRandomService(), disableCaPinning)
+            : this(ikey, skey, host, user_agent, "https", new ThreadSleepService(), new SystemRandomService())
         {
         }
 
         protected DuoApi(string ikey, string skey, string host, string user_agent, string url_scheme,
-                SleepService sleepService, RandomService randomService, bool disableCaPinning = false)
+                SleepService sleepService, RandomService randomService)
         {
             this.ikey = ikey;
             this.skey = skey;
@@ -94,7 +81,6 @@ namespace Duo
             this.url_scheme = url_scheme;
             this.sleepService = sleepService;
             this.randomService = randomService;
-            this.caPinningEnabled = !disableCaPinning;
             if (String.IsNullOrEmpty(user_agent))
             {
                 this.user_agent = FormatUserAgent(DEFAULT_AGENT);
@@ -115,6 +101,21 @@ namespace Duo
         public DuoApi DisableSslCertificateValidation()
         {
             sslCertValidation = false;
+            return this;
+        }
+
+        /// <summary>
+        /// Disables Duo CA certificate pinning for the API calls the client makes.
+        /// TLS is still enforced: connections are validated against the operating system
+        /// trust store instead of Duo's pinned root certificates.
+        ///
+        /// Incompatible with UseCustomRootCertificates - custom root certificates are a
+        /// form of pinning and cannot be used when pinning is disabled.
+        /// </summary>
+        /// <returns>The DuoApi</returns>
+        public DuoApi DisableCaPinning()
+        {
+            caPinningEnabled = false;
             return this;
         }
 

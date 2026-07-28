@@ -209,7 +209,7 @@ public class DisableCaPinningConfigTest
     [Fact]
     public void TestCustomRootsWithPinningDisabledThrows()
     {
-        var api = new DuoApi("ikey", "skey", "example.com", null, disableCaPinning: true);
+        var api = new DuoApi("ikey", "skey", "example.com", null).DisableCaPinning();
         var customRoots = new X509Certificate2Collection();
 
         Assert.Throws<InvalidOperationException>(() => api.UseCustomRootCertificates(customRoots));
@@ -218,10 +218,18 @@ public class DisableCaPinningConfigTest
     [Fact]
     public void TestCustomRootsWithPinningEnabledSucceeds()
     {
-        var api = new DuoApi("ikey", "skey", "example.com", null, disableCaPinning: false);
+        var api = new DuoApi("ikey", "skey", "example.com", null);
         var customRoots = new X509Certificate2Collection();
 
         // Should not throw and should return the client for chaining.
         Assert.Same(api, api.UseCustomRootCertificates(customRoots));
+    }
+
+    [Fact]
+    public void TestDisableCaPinningReturnsClientForChaining()
+    {
+        var api = new DuoApi("ikey", "skey", "example.com", null);
+
+        Assert.Same(api, api.DisableCaPinning());
     }
 }
