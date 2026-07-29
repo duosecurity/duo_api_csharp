@@ -195,6 +195,8 @@ public class TestApiCall
         string response = api.ApiCall("GET", "/DefaultUserAgent", new Dictionary<string, string>(), 10000, out code);
         Assert.Equal(HttpStatusCode.OK, code);
         Assert.StartsWith(api.DEFAULT_AGENT, response);
+        Assert.Contains(DuoApi.CA_BUNDLE_VERSION, response);
+        Assert.EndsWith("(ca_pinning=enabled)", response);
     }
 
     [Fact]
@@ -209,7 +211,23 @@ public class TestApiCall
         HttpStatusCode code;
         string response = api.ApiCall("GET", "/CustomUserAgent", new Dictionary<string, string>(), 10000, out code);
         Assert.Equal(HttpStatusCode.OK, code);
-        Assert.Equal("CustomUserAgent/1.0", response);
+        Assert.Equal("CustomUserAgent/1.0 " + DuoApi.CA_BUNDLE_VERSION + " (ca_pinning=enabled)", response);
+    }
+
+    [Fact]
+    public void TestUserAgentCaPinningDisabled()
+    {
+        api = new TestDuoApi(test_ikey, test_skey, test_host, "CustomUserAgent/1.0");
+        api.DisableCaPinning();
+        srv.handler = delegate (HttpListenerContext ctx)
+        {
+            return ctx.Request.UserAgent;
+        };
+
+        HttpStatusCode code;
+        string response = api.ApiCall("GET", "/CaPinningDisabled", new Dictionary<string, string>(), 10000, out code);
+        Assert.Equal(HttpStatusCode.OK, code);
+        Assert.Equal("CustomUserAgent/1.0 " + DuoApi.CA_BUNDLE_VERSION + " (ca_pinning=disabled)", response);
     }
 
     [Fact]
