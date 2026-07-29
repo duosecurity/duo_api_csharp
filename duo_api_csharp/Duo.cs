@@ -25,6 +25,7 @@ namespace Duo
     public class DuoApi
     {
         public string DEFAULT_AGENT = "DuoAPICSharp/1.1.0";
+        public const string CA_BUNDLE_VERSION = "ca_bundle/1.0";
 
         private const int INITIAL_BACKOFF_MS = 1000;
         private const int MAX_BACKOFF_MS = 32000;
@@ -319,7 +320,7 @@ namespace Duo
             request.Accept = "application/json";
             request.Headers.Add("Authorization", auth);
             request.Headers.Add("X-Duo-Date", date);
-            request.UserAgent = this.user_agent;
+            request.UserAgent = AppendCaInfo(this.user_agent);
             // If no proxy, check for and use WinHTTP proxy as autoconfig won't pick this up when run from a service
             if (!HasProxyServer(request))
                 request.Proxy = GetWinhttpProxy();
@@ -568,6 +569,15 @@ namespace Duo
             return String.Format(
                  "{0} ({1}; .NET {2})", product_name, System.Environment.OSVersion,
                  System.Environment.Version);
+        }
+
+        /// Appends the CA bundle version and current CA pinning status to a
+        /// User-Agent string. Composed at request time so the pinning status
+        /// reflects the client's runtime state (e.g. after DisableCaPinning).
+        private string AppendCaInfo(string agent)
+        {
+            string caPinning = caPinningEnabled ? "(ca_pinning=enabled)" : "(ca_pinning=disabled)";
+            return String.Format("{0} {1} {2}", agent, CA_BUNDLE_VERSION, caPinning);
         }
 
         #region Private Methods
