@@ -9,11 +9,10 @@ on:
       - master
 
 jobs:
-  # Build and test both target frameworks (net48 and net8.0) via the .NET SDK.
-  # windows-2022 ships the .NET Framework 4.8 targeting pack, so `dotnet test`
-  # exercises both TFMs of the multi-targeted projects.
-  build-and-test:
-    name: Build and test (net48 + net8.0)
+  # Build and test the net8.0 target framework.
+  # The job name is a required status check on master; do not rename it.
+  dotnet-core-ci:
+    name: .NET Core - test
     runs-on: windows-2022
 
     steps:
@@ -28,7 +27,31 @@ jobs:
         run: dotnet restore
 
       - name: Build solution
-        run: dotnet build --no-restore --configuration Debug
+        run: dotnet build --no-restore --configuration Debug --framework net8.0
 
       - name: Run tests
-        run: dotnet test --no-build --configuration Debug
+        run: dotnet test --no-build --configuration Debug --framework net8.0
+
+  # Build and test the net48 target framework. windows-2022 ships the
+  # .NET Framework 4.8 targeting pack, so the .NET SDK can build and test it.
+  # The job name is a required status check on master; do not rename it.
+  dotnet-framework-ci:
+    name: .NET Framework - test
+    runs-on: windows-2022
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build solution
+        run: dotnet build --no-restore --configuration Debug --framework net48
+
+      - name: Run tests
+        run: dotnet test --no-build --configuration Debug --framework net48
