@@ -42,6 +42,13 @@ namespace Duo
         /// <summary>
         /// Get a certificate pinner that ensures only connections to the provided root certificates are allowed
         /// </summary>
+        /// <remarks>
+        /// Pass root CA certificates. On .NET 5+ the supplied certificates become the only
+        /// trust anchors, so each must be able to terminate a chain; pinning an intermediate
+        /// there will reject connections, whereas on .NET Framework the SPKI match accepts an
+        /// intermediate anywhere in the validated chain. Pinning roots behaves identically on
+        /// both, which is what the bundled ca_certs.pem relies on.
+        /// </remarks>
         /// <returns>A certificate pinner for use in an HttpWebRequest</returns>
         public static RemoteCertificateValidationCallback GetCustomRootCertificatesPinner(X509CertificateCollection rootCerts)
         {
@@ -75,20 +82,21 @@ namespace Duo
         }
 
         /// <summary>
-        /// Pin only to the configured root certificates, and reject connections to any other roots.
+        /// Pin only to the configured certificates, and reject connections that do not
+        /// involve one of them.
         ///
-        /// The connection is only allowed if the presented chain is anchored in one of the
-        /// pinned roots. Anchoring is checked by matching the SHA-256 hash of each presented
-        /// certificate's SubjectPublicKeyInfo (SPKI) against the pinned set, walking the entire
+        /// The connection is allowed only if the SHA-256 hash of some presented certificate's
+        /// SubjectPublicKeyInfo (SPKI) is in the pinned set, checked by walking the entire
         /// chain. Matching on the SPKI rather than on the full certificate DER makes pinning
         /// robust against cross-signing: the self-signed and cross-signed forms of the same CA
         /// share a public key (and therefore an SPKI hash) even though their certificate DER
         /// differs. Walking the full chain means it does not matter where in the chain the OS
-        /// placed the pinned key.
+        /// placed the pinned key -- which is the whole point, since Windows and Linux build
+        /// different chains for the same server.
         ///
-        /// On .NET 5+ the presented chain is additionally re-validated against only the pinned
-        /// roots using <see cref="X509ChainTrustMode.CustomRootTrust"/>, so trust does not depend
-        /// on the OS trust store containing the pinned root.
+        /// On .NET 5+ the chain is additionally re-validated against only the pinned
+        /// certificates using <see cref="X509ChainTrustMode.CustomRootTrust"/>, which requires
+        /// a pinned certificate to be a usable trust anchor and not merely present.
         /// </summary>
         /// <param name="request">The actual request (unused)</param>
         /// <param name="certificate">The server certificate presented to the connection</param>
@@ -108,7 +116,7 @@ namespace Duo
 
             // If the regular certificate checking process failed, fail.
             // We require the platform to have validated signatures, expiry, name, etc.
-            // first; pinning then restricts which roots are acceptable.
+            // first; pinning then restricts which keys are acceptable.
             if (sslPolicyErrors != SslPolicyErrors.None)
             {
                 return false;
@@ -121,18 +129,17 @@ namespace Duo
             }
 
 #if NET5_0_OR_GREATER
-            // On .NET 5+, restrict the trust anchors to exactly the pinned roots via a
-            // custom trust store. This removes any dependence on the OS trust store and
-            // enforces pinning at chain-validation time rather than only by inspection.
+            // On .NET 5+, restrict the trust anchors to exactly the pinned certificates via a
+            // custom trust store, so acceptance requires the chain to genuinely terminate in
+            // our bundle rather than merely to contain one of its keys somewhere.
             if (!ValidatesAgainstCustomTrustStore(certificate, chain))
             {
                 return false;
             }
 #endif
 
-            // Walk the full chain and require that at least one presented certificate's
-            // SPKI hash is in the pinned set. This is the primary check on .NET Framework
-            // and a defense-in-depth check on .NET 5+.
+            // The pin check itself: walk the full chain and require that at least one
+            // presented certificate's SPKI hash is in the pinned set.
             return ChainContainsPinnedSpki(chain);
         }
 

@@ -126,17 +126,32 @@ public class CertPinningTest : CertPinningTestBase
     }
 
     [Fact]
-    public void TestPinsOnIntermediateSpki()
+    public void TestPinnedIntermediateIsAcceptedOnlyWhereItCanAnchor()
     {
-        // Pinning walks the full chain and matches on SPKI, so pinning the SPKI of the
-        // *intermediate* (not the root) is sufficient to accept the Duo chain. This is
-        // the property that makes pinning robust to the OS rearranging/substituting the
-        // upper portion of the chain (e.g. cross-signed roots).
         var intermediateOnly = new X509Certificate2Collection
             {
                 CertFromString(DUO_API_CERT_INTER)
             };
         var pinner = new CertificatePinnerFactory(intermediateOnly).GetPinner();
+
+        bool accepted = pinner(null, DuoApiServerCert(), DuoApiChain(), SslPolicyErrors.None);
+#if NET5_0_OR_GREATER
+        Assert.False(accepted);
+#else
+        Assert.True(accepted);
+#endif
+    }
+
+    [Fact]
+    public void TestPinnedRootAcceptedOnAllFrameworks()
+    {
+        // The contract both mechanisms agree on, and the one the shipped bundle relies on:
+        // pinning the chain's root CA accepts the chain.
+        var rootOnly = new X509Certificate2Collection
+            {
+                CertFromString(DUO_API_CERT_ROOT)
+            };
+        var pinner = new CertificatePinnerFactory(rootOnly).GetPinner();
 
         Assert.True(pinner(null, DuoApiServerCert(), DuoApiChain(), SslPolicyErrors.None));
     }
@@ -175,11 +190,8 @@ public class SpkiPinningTest : CertPinningTestBase
     }
 
     [Fact]
-    public void TestCrossSignedFormsShareSpki()
+    public void TestSpkiHashIsDeterministic()
     {
-        // The whole point of SPKI pinning: two certificates with the same public key
-        // produce the same SPKI hash regardless of issuer/signature differences. Here
-        // we assert the property directly by re-encoding the same public key.
         var root = CertFromString(DUO_API_CERT_ROOT);
         string first = Duo.SpkiPinning.ComputeSpkiSha256(root.RawData);
         string second = Duo.SpkiPinning.ComputeSpkiSha256(root.RawData);

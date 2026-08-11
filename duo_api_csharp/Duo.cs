@@ -690,35 +690,47 @@ namespace Duo
         /// <remarks>
         /// If no proxy is set, the Proxy member is typically non-null and set to an object type that includes but hides IWebProxy with no address,
         /// so it cannot be inspected.  Resolving this requires reflection to extract the hidden webProxy object and check it's Address member.
+        ///
+        /// That reflection only works on .NET Framework. On .NET Core / .NET 5+ the default
+        /// proxy is an internal IWebProxy implementation (system- or environment-derived) that
+        /// has no WebProxy nested inside it, so there is nothing for the reflection to find and
+        /// we fall back to interrogating the IWebProxy interface instead.
         /// </remarks>
         /// <param name="requestObject">Request to check</param>
         /// <returns>TRUE if a proxy is in use, else FALSE</returns>
         public static bool HasProxyServer(HttpWebRequest requestObject)
         {
-            WebProxy actualProxy = null;
-            bool hasProxyServer = false;
-
-            if (requestObject.Proxy != null)
+            IWebProxy proxy = requestObject.Proxy;
+            if (proxy == null)
             {
-                // WebProxy is described as the base class for IWebProxy, so we should always see this type as the field is initialized by the framework.
-                if (!(requestObject.Proxy is WebProxy))
-                {
-                    var webProxyField = requestObject.Proxy.GetType().GetField("webProxy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
-                    if (webProxyField != null)
-                        actualProxy = webProxyField.GetValue(requestObject.Proxy) as WebProxy;
-                }
-                else
-                {
-                    actualProxy = requestObject.Proxy as WebProxy;
-                }
-                hasProxyServer = (actualProxy.Address != null);
-            }
-            else
-            {
-                hasProxyServer = false;
+                return false;
             }
 
-            return hasProxyServer;
+            WebProxy actualProxy = proxy as WebProxy;
+            if (actualProxy == null)
+            {
+                // WebProxy may be hidden inside a framework wrapper type; dig it out.
+                var webProxyField = proxy.GetType().GetField("webProxy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                if (webProxyField != null)
+                    actualProxy = webProxyField.GetValue(proxy) as WebProxy;
+            }
+
+            if (actualProxy != null)
+            {
+                return actualProxy.Address != null;
+            }
+
+            // No WebProxy to inspect, so ask the proxy itself whether it would redirect this
+            // particular request. A proxy is only in use if the request is not bypassed and
+            // resolves to somewhere other than its original destination.
+            Uri requestUri = requestObject.RequestUri;
+            if (requestUri == null || proxy.IsBypassed(requestUri))
+            {
+                return false;
+            }
+
+            Uri resolvedUri = proxy.GetProxy(requestUri);
+            return resolvedUri != null && resolvedUri != requestUri;
         }
         #endregion Private Methods
 
