@@ -1,6 +1,7 @@
 ﻿using Duo;
 using System;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using System.Collections.Generic;
 using System.IO;
@@ -53,10 +54,42 @@ public class TestServer
 {
     public int requestsToHandle = 1;
 
+    /// <summary>
+    /// The loopback port this server is listening on. Chosen dynamically rather than
+    /// fixed, because the test project multi-targets and `dotnet test` runs the net48
+    /// and net8.0 test hosts concurrently; a fixed port makes the second host fail to
+    /// register its HttpListener prefix and crash the run.
+    /// </summary>
+    public int Port { get; private set; }
+
     public TestServer(string ikey, string skey)
     {
         this.ikey = ikey;
         this.skey = skey;
+
+        // Bind in the constructor so the port is known (and the socket already
+        // accepting) before the caller builds a client against it.
+        this.Port = FindFreePort();
+        this.listener = new HttpListener();
+        this.listener.Prefixes.Add(String.Format("http://localhost:{0}/", this.Port));
+        this.listener.Start();
+    }
+
+    /// <summary>
+    /// Ask the OS for an unused loopback port by binding port 0 and releasing it.
+    /// </summary>
+    private static int FindFreePort()
+    {
+        var probe = new TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        try
+        {
+            return ((IPEndPoint)probe.LocalEndpoint).Port;
+        }
+        finally
+        {
+            probe.Stop();
+        }
     }
 
     public delegate string TestDispatchHandler(HttpListenerContext ctx);
@@ -83,10 +116,31 @@ public class TestServer
 
     public void Run()
     {
-        this.listener = new HttpListener();
-        this.listener.Prefixes.Add("http://localhost:8080/");
-        this.listener.Start();
+        try
+        {
+            HandleRequests();
+        }
+        catch (Exception)
+        {
+            // The listener was stopped or disposed while we were waiting for a request.
+            // This is normal when a test finishes early, and must not be allowed to
+            // escape and crash the test host.
+        }
+        finally
+        {
+            try
+            {
+                this.listener.Stop();
+            }
+            catch (Exception)
+            {
+                // Already stopped.
+            }
+        }
+    }
 
+    private void HandleRequests()
+    {
         for (int i = 0; i < requestsToHandle; i++)
         {
             // Wait for a request
@@ -106,21 +160,28 @@ public class TestServer
                 responseString = e.ToString();
             }
 
-            // write the response
-            HttpListenerResponse response = context.Response;
-            System.IO.Stream output = response.OutputStream;
-
-            if (!String.IsNullOrEmpty(responseString))
+            // Write the response. This runs on a background thread, so any failure here
+            // has to be swallowed: an unhandled exception would tear down the whole test
+            // host. Writing can legitimately fail when the client has already given up
+            // (TestJsonTimeout) or stopped the listener from under us.
+            try
             {
-                byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                response.ContentLength64 = buffer.Length;
-                output.Write(buffer, 0, buffer.Length);
-            }
-            output.Close();
-        }
+                HttpListenerResponse response = context.Response;
+                System.IO.Stream output = response.OutputStream;
 
-        // shut down the listener
-        this.listener.Stop();
+                if (!String.IsNullOrEmpty(responseString))
+                {
+                    byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                    response.ContentLength64 = buffer.Length;
+                    output.Write(buffer, 0, buffer.Length);
+                }
+                output.Close();
+            }
+            catch (Exception)
+            {
+                // Client went away or the listener was stopped; nothing to report.
+            }
+        }
     }
 
     private string ikey;
@@ -131,19 +192,22 @@ public class TestApiCall
 {
     private const string test_ikey = "DI9FD6NAKXN4B9DTCCB7";
     private const string test_skey = "RScfSuMrpL52TaciEhGtZkGjg8W4JSe5luPL63J8";
-    private const string test_host = "localhost:8080";
+
+    private readonly string test_host;
 
     private TestServer srv;
     private Thread srvThread;
     private TestDuoApi api;
 
     /// <summary>
-    /// 
+    ///
     /// </summary>
     public TestApiCall()
     {
-        api = new TestDuoApi(test_ikey, test_skey, test_host);
+        // Start the server first: it picks its own port, which the client then targets.
         srv = new TestServer(test_ikey, test_skey);
+        test_host = "localhost:" + srv.Port;
+        api = new TestDuoApi(test_ikey, test_skey, test_host);
         srvThread = new Thread(srv.Run);
         srvThread.Start();
     }
@@ -386,7 +450,7 @@ public class TestApiCall
         var we = Assert.IsType<WebException>(ex);
         Assert.Equal(WebExceptionStatus.Timeout, we.Status);
 
-        // Free up listener for later tests 
+        // Tear down this test's server, which is still sitting in its handler sleep.
         srv.listener.Stop();
     }
 
