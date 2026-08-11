@@ -9,9 +9,11 @@ on:
       - master
 
 jobs:
-# Build and test on .NET Core
-  dotnet-core-ci:
-    name: .NET Core - test
+  # Build and test both target frameworks (net48 and net8.0) via the .NET SDK.
+  # windows-2022 ships the .NET Framework 4.8 targeting pack, so `dotnet test`
+  # exercises both TFMs of the multi-targeted projects.
+  build-and-test:
+    name: Build and test (net48 + net8.0)
     runs-on: windows-2022
 
     steps:
@@ -20,39 +22,13 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-version: 8.0.x
 
-      - name: Install dependencies
-        run: nuget restore
+      - name: Restore
+        run: dotnet restore
 
       - name: Build solution
-        run: dotnet build
+        run: dotnet build --no-restore --configuration Debug
 
       - name: Run tests
-        run: dotnet test
-
-      # - name: Run linter
-      #   run: dotnet format --verify-no-changes
-
-  # Build and test on .NET Framework
-  dotnet-framework-ci:
-    name: .NET Framework - test
-    runs-on: windows-2022
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
-
-      - name: Set up VSTest
-        uses: darenm/Setup-VSTest@v1
-
-      - name: Install dependencies
-        run: nuget restore
-
-      - name: Build DuoApiTest solution
-        run: msbuild.exe duo_api_csharp.sln
-
-      - name: Run Tests dll
-        run: vstest.console.exe .\test\bin\Debug\DuoApiTest.dll
+        run: dotnet test --no-build --configuration Debug
