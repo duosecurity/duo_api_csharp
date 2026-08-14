@@ -126,27 +126,24 @@ public class CertPinningTest : CertPinningTestBase
     }
 
     [Fact]
-    public void TestPinnedIntermediateIsAcceptedOnlyWhereItCanAnchor()
+    public void TestPinsOnIntermediateSpki()
     {
+        // The pin may match anywhere in the validated chain, not just at the root, so
+        // that a chain restructuring does not break the client.
         var intermediateOnly = new X509Certificate2Collection
             {
                 CertFromString(DUO_API_CERT_INTER)
             };
         var pinner = new CertificatePinnerFactory(intermediateOnly).GetPinner();
 
-        bool accepted = pinner(null, DuoApiServerCert(), DuoApiChain(), SslPolicyErrors.None);
-#if NET5_0_OR_GREATER
-        Assert.False(accepted);
-#else
-        Assert.True(accepted);
-#endif
+        Assert.True(pinner(null, DuoApiServerCert(), DuoApiChain(), SslPolicyErrors.None));
     }
 
     [Fact]
-    public void TestPinnedRootAcceptedOnAllFrameworks()
+    public void TestPinsOnRootSpki()
     {
-        // The contract both mechanisms agree on, and the one the shipped bundle relies on:
-        // pinning the chain's root CA accepts the chain.
+        // The contract the shipped bundle relies on: pinning the chain's root CA
+        // accepts the chain.
         var rootOnly = new X509Certificate2Collection
             {
                 CertFromString(DUO_API_CERT_ROOT)

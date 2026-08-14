@@ -1,9 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Multi-target so the .NET 5+ CustomRootTrust pinning branch can be compiled
-         against the modern TLS APIs, while net48 retains the SPKI full-chain-walk
-         fallback. NET5_0_OR_GREATER is defined automatically for the net8.0 target. -->
+    <!-- Multi-target so consumers on modern .NET and on .NET Framework both get a
+         supported build. The pinning implementation is identical for both. -->
     <TargetFrameworks>net48;net8.0</TargetFrameworks>
     <OutputType>Library</OutputType>
     <!-- Preserve the existing output assembly and root namespace so the embedded
