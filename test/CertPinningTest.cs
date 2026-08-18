@@ -116,7 +116,106 @@ public class CertPinningTest : CertPinningTestBase
         var pinner = new CertificatePinnerFactory(certCollection).GetPinner();
 
         Assert.True(pinner(null, CertFromString(MICROSOFT_COM_CERT_SERVER), MicrosoftComChain(), SslPolicyErrors.None));
-    }  
+    }
+
+    [Fact]
+    public void TestChainErrorRejected()
+    {
+        // A chain-level error must be rejected even though the chain roots in a pinned CA.
+        Assert.False(duoPinner(null, DuoApiServerCert(), DuoApiChain(), SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+
+    [Fact]
+    public void TestPinsOnIntermediateSpki()
+    {
+        // The pin may match anywhere in the validated chain, not just at the root, so
+        // that a chain restructuring does not break the client.
+        var intermediateOnly = new X509Certificate2Collection
+            {
+                CertFromString(DUO_API_CERT_INTER)
+            };
+        var pinner = new CertificatePinnerFactory(intermediateOnly).GetPinner();
+
+        Assert.True(pinner(null, DuoApiServerCert(), DuoApiChain(), SslPolicyErrors.None));
+    }
+
+    [Fact]
+    public void TestPinsOnRootSpki()
+    {
+        // The contract the shipped bundle relies on: pinning the chain's root CA
+        // accepts the chain.
+        var rootOnly = new X509Certificate2Collection
+            {
+                CertFromString(DUO_API_CERT_ROOT)
+            };
+        var pinner = new CertificatePinnerFactory(rootOnly).GetPinner();
+
+        Assert.True(pinner(null, DuoApiServerCert(), DuoApiChain(), SslPolicyErrors.None));
+    }
+
+    [Fact]
+    public void TestUnrelatedPinnedKeyRejected()
+    {
+        // Pinning a key that appears nowhere in the presented chain must reject the
+        // connection, even though the OS validated the chain.
+        var unrelated = new X509Certificate2Collection
+            {
+                CertFromString(MICROSOFT_COM_CERT_ROOT)
+            };
+        var pinner = new CertificatePinnerFactory(unrelated).GetPinner();
+
+        Assert.False(pinner(null, DuoApiServerCert(), DuoApiChain(), SslPolicyErrors.None));
+    }
+}
+
+public class SpkiPinningTest : CertPinningTestBase
+{
+    // SPKI SHA-256 hashes independently computed with:
+    //   openssl x509 -noout -pubkey | openssl pkey -pubin -outform DER | sha256sum | base64
+    private const string DUO_ROOT_SPKI = "WoiWRyIOVNa9ihaBciRSC7XHjliYS9VwUGOIud4PB18=";
+    private const string DUO_INTER_SPKI = "k2v657xBsOVe1PQRwOsHsw3bsGT2VzIqz5K+59sNQws=";
+    private const string MICROSOFT_ROOT_SPKI = "i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=";
+
+    [Theory]
+    [InlineData(DUO_API_CERT_ROOT, DUO_ROOT_SPKI)]
+    [InlineData(DUO_API_CERT_INTER, DUO_INTER_SPKI)]
+    [InlineData(MICROSOFT_COM_CERT_ROOT, MICROSOFT_ROOT_SPKI)]
+    public void TestComputeSpkiSha256MatchesOpenSsl(string certBase64, string expectedSpki)
+    {
+        var cert = CertFromString(certBase64);
+        Assert.Equal(expectedSpki, Duo.SpkiPinning.ComputeSpkiSha256(cert.RawData));
+    }
+
+    [Fact]
+    public void TestSpkiHashIsDeterministic()
+    {
+        var root = CertFromString(DUO_API_CERT_ROOT);
+        string first = Duo.SpkiPinning.ComputeSpkiSha256(root.RawData);
+        string second = Duo.SpkiPinning.ComputeSpkiSha256(root.RawData);
+        Assert.Equal(first, second);
+        Assert.Equal(DUO_ROOT_SPKI, first);
+    }
+
+    [Fact]
+    public void TestEmptyDataThrows()
+    {
+        Assert.ThrowsAny<Exception>(() => Duo.SpkiPinning.ComputeSpkiSha256(new byte[0]));
+    }
+
+    [Fact]
+    public void TestAllBundledCertsHashable()
+    {
+        // Every certificate shipped in ca_certs.pem must be parseable by the SPKI
+        // extractor (no malformed/unsupported DER in the bundle).
+        var certs = CertificatePinnerFactory.GetDuoCertCollection();
+        Assert.NotEmpty(certs);
+        foreach (X509Certificate cert in certs)
+        {
+            var c2 = new X509Certificate2(cert);
+            string hash = Duo.SpkiPinning.ComputeSpkiSha256(c2.RawData);
+            Assert.False(string.IsNullOrEmpty(hash));
+        }
+    }
 }
 
 public class CertDisablingTest : CertPinningTestBase
