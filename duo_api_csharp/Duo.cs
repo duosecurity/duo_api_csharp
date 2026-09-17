@@ -42,15 +42,14 @@ namespace Duo
         private bool caPinningEnabled = true;
         private X509CertificateCollection customRoots = null;
         
-        // TLS 1.0/1.1 deprecation effective June 30, 2023
-        // Of the SecurityProtocolType enum, it should be noted that SystemDefault is not available prior to .NET 4.7 and TLS 1.3 is not available prior to .NET 4.8.
+        // Defaults to SystemDefault so the platform picks the highest mutually supported TLS version; pinning to an older version would block TLS 1.3 and post-quantum hybrid key exchange (ML-KEM).
         private static SecurityProtocolType SelectSecurityProtocolType
         {
             get
             {
                 SecurityProtocolType t;
                 if (!Enum.TryParse(ConfigurationManager.AppSettings["DuoAPI_SecurityProtocolType"], out t))
-                    return SecurityProtocolType.Tls12;
+                    return SecurityProtocolType.SystemDefault;
 
                 return t;
             }
