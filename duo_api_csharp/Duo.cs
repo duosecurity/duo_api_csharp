@@ -42,14 +42,14 @@ namespace Duo
         private bool caPinningEnabled = true;
         private X509CertificateCollection customRoots = null;
         
-        // Defaults to SystemDefault so the platform picks the highest mutually supported TLS version; pinning to an older version would block TLS 1.3 and post-quantum hybrid key exchange (ML-KEM).
+        // Allow only TLS 1.2 and 1.3; the Duo API no longer accepts older versions, and TLS 1.3 is required for post-quantum hybrid key exchange (ML-KEM).
         private static SecurityProtocolType SelectSecurityProtocolType
         {
             get
             {
                 SecurityProtocolType t;
                 if (!Enum.TryParse(ConfigurationManager.AppSettings["DuoAPI_SecurityProtocolType"], out t))
-                    return SecurityProtocolType.SystemDefault;
+                    return SecurityProtocolType.Tls12 | SecurityProtocolType.Tls13;
 
                 return t;
             }
