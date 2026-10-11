@@ -109,7 +109,9 @@ namespace duo_api_csharp.Classes
                 if( !string.IsNullOrWhiteSpace(oneCert) )
                 {
                     var bytes = Encoding.UTF8.GetBytes(oneCert);
+#pragma warning disable SYSLIB0057
                     coll.Add(new X509Certificate(bytes));
+#pragma warning restore SYSLIB0057
                 }
             }
             

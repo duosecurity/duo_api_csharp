@@ -415,9 +415,9 @@ namespace duo_api_csharp
         private HttpResponseMessage _SendHTTPRequest(HttpMethod method, Uri url, string auth, DuoSignatureTypes signatureType, DuoRequestData? bodyRequestData = null, Dictionary<string, string>? duoHeaders = null)
         {
             // Setup the HttpClient. There is no reason to permit anything other than TLS1.2 and 1.3 as the API endpoints don't accept it
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13 | SecurityProtocolType.Tls12;
             var WebRequest = new HttpClient(new HttpClientHandler
             {
+                SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
                 ServerCertificateCustomValidationCallback = _ServerCertificateCustomValidationCallback,
             });
             
@@ -504,9 +504,9 @@ namespace duo_api_csharp
         private async Task<HttpResponseMessage> _SendHTTPRequestAsync(HttpMethod method, Uri url, string auth, DuoSignatureTypes signatureType, DuoRequestData? bodyRequestData = null, Dictionary<string, string>? duoHeaders = null)
         {
             // Setup the HttpClient. There is no reason to permit anything other than TLS1.2 and 1.3 as the API endpoints don't accept it
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls13 | SecurityProtocolType.Tls12;
             var WebRequest = new HttpClient(new HttpClientHandler
             {
+                SslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
                 ServerCertificateCustomValidationCallback = _ServerCertificateCustomValidationCallback,
             });
             
