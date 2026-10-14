@@ -18,6 +18,12 @@ Duo_api_csharp uses the .NET libraries for TLS operations.  .NET 4.7 or later is
 
 In addition, version 1.0.0 of duo_api_csharp is required, since prior versions targeted .NET 4.5 which does not support TLS 1.2 or 1.3.
 
+## Certificate Validation
+
+Duo_api_csharp trusts only the certificate authorities bundled in `ca_certs.pem`, and does not depend on the operating system trust store containing them. A connection is accepted when the server's certificate chains to one of the bundled certificates and passes the platform's usual checks (hostname, signatures, validity periods, constraints, serverAuth usage, and the operating system's distrust list). This works on hosts whose trust store is missing or out of date, without downloading certificates.
+
+`UseCustomRootCertificates` replaces the bundled certificates with the ones you supply, which should be root certificates. `DisableCaPinning` instead validates against the operating system trust store only.
+
 # Installing
 A Windows machine is required to run and test duo_api_csharp.
 

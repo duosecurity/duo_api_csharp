@@ -121,6 +121,7 @@ namespace Duo
 
         /// <summary>
         /// Override the set of Duo root certificates used for certificate pinning.  Provide a collection of acceptable root certificates.
+        /// They replace the bundled Duo certificates as the trust anchors, so they need not be in the OS trust store.
         ///
         /// Incompatible with DisableSslCertificateValidation - if that is enabled, certificate pinning is not done at all.
         /// Incompatible with disabling CA pinning - custom root certificates are a form of pinning and cannot be used when pinning is disabled.

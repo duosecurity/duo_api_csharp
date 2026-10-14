@@ -120,10 +120,10 @@ public class CertPinningTest : CertPinningTestBase
     }
 
     [Fact]
-    public void TestChainErrorRejected()
+    public void TestExpiredChainRejected()
     {
-        // A chain-level error that is not about the root being untrusted must be rejected
-        // even though the chain roots in a pinned CA.
+        // The OS rejected the chain, so it is validated against the bundle at the current
+        // time, by which the 2024 leaf has expired.
         Assert.False(duoPinner(null, DuoApiServerCert(), DuoApiChain(), SslPolicyErrors.RemoteCertificateChainErrors));
     }
 
@@ -170,50 +170,24 @@ public class CertPinningTest : CertPinningTestBase
     }
 }
 
-public class UntrustedRootPinningTest
+public class BundleAnchoredPinningTest : CertPinningTestBase
 {
-    // These tests use a freshly generated CA that no OS trust store contains, so the
-    // platform reports UntrustedRoot (root available) or PartialChain (root missing).
+    // The certificates api-*.duosecurity.com sent on 2026-10-07: the leaf, its issuing CA,
+    // and DigiCert TLS RSA4096 Root G5 cross-signed by DigiCert High Assurance EV Root CA.
+    // As is normal for TLS, no root certificate is sent.
+    private static readonly DateTime DuoChain2026Time = new DateTime(2026, 10, 7);
+    private const string DUO_API_2026_CERT_SERVER = "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";
+    private const string DUO_API_2026_CERT_INTER = "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";
+    private const string DUO_API_2026_CERT_G5_CROSS = "MIIFizCCBHOgAwIBAgIQDmhhxVN+w8ZIHCtHCqtrLTANBgkqhkiG9w0BAQwFADBsMQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3d3cuZGlnaWNlcnQuY29tMSswKQYDVQQDEyJEaWdpQ2VydCBIaWdoIEFzc3VyYW5jZSBFViBSb290IENBMB4XDTIzMDUxMDAwMDAwMFoXDTMxMTEwOTIzNTk1OVowTTELMAkGA1UEBhMCVVMxFzAVBgNVBAoTDkRpZ2lDZXJ0LCBJbmMuMSUwIwYDVQQDExxEaWdpQ2VydCBUTFMgUlNBNDA5NiBSb290IEc1MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAs9D0yXkRnf38ZoHnzNXkvOyBPmo1ji63596v+QdNzzCd6gkLmb1sV9oYSrh4rDo5qKZIrC5y5b3r8RrN56QDqT8RtNgviRb7lAE9uy/4EwWheByOKOBF4IP0WRuVs65+A0XlvsJC/u7yPLaFE5gynRaoKcILHDjcnzF3XL8no/wnrLcrvXSbFy3ygdpdsOEjFz6IShIj0OrPnd4DF7FCSqAWTKRtk+k/Ou46fJ1YnfROj/w7I8htuOIF2szr7MMx9NenKVSAz0RbTG8wnvPM3R+UQ51Nf3BwDdQ60TfwbJ2bwBSTWO/NQTh1vBMDlXx/41zp1Q3V4nwQYqpr8D128z+j6LDB/e+qV02shqcYtCnBLA6/ZL4pjNgCLc1cL/J/7xX0DBWsCrDx0w1Pak13lwGg8Wa3t87vzuzspXXKrOPhY/e4oQTIvHs/XS0WIlbtSEn+py95MCWbumstP507xBfnHS778s+m/OMULJaYIYy0kekZYIPyMCsGc1DVmDsG6ceKDGCMKPhSm27h9k27BiSb1ysmP/0qL3H11iS+fzGeD23oj09Noz//NerfSV5Bj4b58Xd5Sxu0o14v+0YC0GYTXl6FT87YcIh7zgG1lpfXzX39gvjCJMHKATlPjaLBFEAfnGbVDAlG1vLQ0Uh2VjpDy7YKETm6jBNsBrWez+sCAwEAAaOCAUYwggFCMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYEFFEzHO02QK8X0yXNaWjyr04jPrNBMB8GA1UdIwQYMBaAFLE+w2kD+L9HAdSYJhoIAu9jZCvDMA4GA1UdDwEB/wQEAwIBhjB/BggrBgEFBQcBAQRzMHEwJAYIKwYBBQUHMAGGGGh0dHA6Ly9vY3NwLmRpZ2ljZXJ0LmNvbTBJBggrBgEFBQcwAoY9aHR0cDovL2NhY2VydHMuZGlnaWNlcnQuY29tL0RpZ2lDZXJ0SGlnaEFzc3VyYW5jZUVWUm9vdENBLmNydDBLBgNVHR8ERDBCMECgPqA8hjpodHRwOi8vY3JsMy5kaWdpY2VydC5jb20vRGlnaUNlcnRIaWdoQXNzdXJhbmNlRVZSb290Q0EuY3JsMBEGA1UdIAQKMAgwBgYEVR0gADANBgkqhkiG9w0BAQwFAAOCAQEANTm3QDMNj87tEYmxMNE/4Z3xk5TaMhPYoRVQv2125QYhW6q9UMhapbtjtCRkaIt4JVEgnaAJ3UNZlWzVEuWIf69ttKPHm6+yCRIhxNxaKBcU8tJmf1lvyTEgPeNNskerPFZYV3enZu5fJydE5q91vtTFABYXUXt0CHAsqPrSLL2cY0wCqK1gKBnkerQT1o1COUbxIWCiIwAMRtyc+HLfs8cjupDnGookKJvH/RKAYqyz/zVjzPlm+n+e0/LRzjPB1s06H+c5AHy1wWxjJvrEB/JThp3hZkKaDiy4j1xSOFFJYUq6VT7VtpMaZ1pU/LUUiSPaMOj8zE/Nft1cR2jbhQ==";
 
-    private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;
-
-    private static X509Certificate2 CreateCa(string name)
-    {
-        using (var key = RSA.Create(2048))
-        {
-            var req = new CertificateRequest($"CN={name}", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-            req.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
-            req.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
-            req.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(req.PublicKey, false));
-            return req.CreateSelfSigned(Now.AddDays(-60), Now.AddYears(1));
-        }
-    }
-
-    private static X509Certificate2 CreateLeaf(X509Certificate2 issuer, DateTimeOffset notBefore, DateTimeOffset notAfter)
-    {
-        using (var key = RSA.Create(2048))
-        {
-            var req = new CertificateRequest("CN=api-test.duosecurity.com", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-            req.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
-            req.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
-                new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") }, false));
-            var serial = new byte[8];
-            new Random().NextBytes(serial);
-            serial[0] &= 0x7F;
-            return req.Create(issuer, notBefore, notAfter, serial);
-        }
-    }
-
-    private static X509Certificate2 CreateLeaf(X509Certificate2 issuer)
-    {
-        return CreateLeaf(issuer, Now.AddDays(-1), Now.AddDays(30));
-    }
-
-    private static X509Chain BuildChain(X509Certificate2 leaf, params X509Certificate2[] extra)
+    // The chain the platform hands the callback when the OS trust store lacks Duo's roots:
+    // it can only be built as far as the certificates the server sent.
+    private static X509Chain PresentedChain(X509Certificate2 leaf, DateTime verificationTime, params X509Certificate2[] sent)
     {
         var chain = new X509Chain();
         chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-        foreach (var cert in extra)
+        chain.ChainPolicy.VerificationTime = verificationTime;
+        foreach (var cert in sent)
         {
             chain.ChainPolicy.ExtraStore.Add(cert);
         }
@@ -221,77 +195,305 @@ public class UntrustedRootPinningTest
         return chain;
     }
 
-    private static RemoteCertificateValidationCallback PinnerFor(params X509Certificate2[] pins)
+    private static X509Chain DuoApi2026PresentedChain()
     {
-        return new CertificatePinnerFactory(new X509Certificate2Collection(pins)).GetPinner();
+        return PresentedChain(CertFromString(DUO_API_2026_CERT_SERVER), DuoChain2026Time,
+                              CertFromString(DUO_API_2026_CERT_INTER),
+                              CertFromString(DUO_API_2026_CERT_G5_CROSS));
     }
 
-    private static bool HasStatus(X509Chain chain, X509ChainStatusFlags flag)
+    private static RemoteCertificateValidationCallback DuoPinnerAt(DateTime verificationTime)
     {
-        foreach (var status in chain.ChainStatus)
-        {
-            if (status.Status == flag)
-            {
-                return true;
-            }
-        }
-        return false;
+        return new CertificatePinnerFactory(CertificatePinnerFactory.GetDuoCertCollection(), verificationTime).GetPinner();
     }
 
     [Fact]
-    public void TestUntrustedPinnedRootAccepted()
+    public void TestDuoChainAcceptedWithoutOsTrust()
     {
-        var root = CreateCa("Pinned Test Root");
-        var leaf = CreateLeaf(root);
-        var chain = BuildChain(leaf, root);
-        Assert.True(HasStatus(chain, X509ChainStatusFlags.UntrustedRoot));
-
-        Assert.True(PinnerFor(root)(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+        // The target scenario: the OS could not validate the chain, but it completes to a
+        // certificate in the bundle.
+        Assert.True(DuoPinnerAt(DuoChain2026Time)(null, CertFromString(DUO_API_2026_CERT_SERVER),
+            DuoApi2026PresentedChain(), SslPolicyErrors.RemoteCertificateChainErrors));
     }
 
     [Fact]
-    public void TestMissingRootRejected()
+    public void TestDuoChainNameMismatchRejected()
     {
-        // Only UntrustedRoot is tolerated. A chain the platform could not complete is
-        // rejected even though its root is pinned.
-        var root = CreateCa("Pinned Test Root");
-        var leaf = CreateLeaf(root);
-        var chain = BuildChain(leaf);
-        Assert.True(HasStatus(chain, X509ChainStatusFlags.PartialChain));
-
-        Assert.False(PinnerFor(root)(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
-    }
-
-    [Fact]
-    public void TestUntrustedUnpinnedRootRejected()
-    {
-        var root = CreateCa("Unpinned Test Root");
-        var leaf = CreateLeaf(root);
-        var chain = BuildChain(leaf, root);
-
-        Assert.False(CertificatePinnerFactory.GetDuoCertificatePinner()(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
-    }
-
-    [Fact]
-    public void TestUntrustedRootWithNameMismatchRejected()
-    {
-        var root = CreateCa("Pinned Test Root");
-        var leaf = CreateLeaf(root);
-        var chain = BuildChain(leaf, root);
-
-        Assert.False(PinnerFor(root)(null, leaf, chain,
+        Assert.False(DuoPinnerAt(DuoChain2026Time)(null, CertFromString(DUO_API_2026_CERT_SERVER),
+            DuoApi2026PresentedChain(),
             SslPolicyErrors.RemoteCertificateChainErrors | SslPolicyErrors.RemoteCertificateNameMismatch));
     }
 
     [Fact]
-    public void TestUntrustedRootWithExpiredLeafRejected()
+    public void TestDuoChainExpiredRejected()
     {
-        var root = CreateCa("Pinned Test Root");
-        var leaf = CreateLeaf(root, Now.AddDays(-30), Now.AddDays(-1));
-        var chain = BuildChain(leaf, root);
-        Assert.True(HasStatus(chain, X509ChainStatusFlags.NotTimeValid));
+        // The leaf expires 2027-03-08.
+        Assert.False(DuoPinnerAt(new DateTime(2027, 4, 1))(null, CertFromString(DUO_API_2026_CERT_SERVER),
+            DuoApi2026PresentedChain(), SslPolicyErrors.RemoteCertificateChainErrors));
+    }
 
-        Assert.False(PinnerFor(root)(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+    [Fact]
+    public void TestDuoChainNotInBundleRejected()
+    {
+        var pinner = new CertificatePinnerFactory(
+            new X509Certificate2Collection { CertFromString(MICROSOFT_COM_CERT_ROOT) }, DuoChain2026Time).GetPinner();
+
+        Assert.False(pinner(null, CertFromString(DUO_API_2026_CERT_SERVER),
+            DuoApi2026PresentedChain(), SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+
+    [Fact]
+    public void TestDuo2024ChainAcceptedWithoutOsTrust()
+    {
+        // The older chain (leaf -> DigiCert SHA2 High Assurance Server CA -> High Assurance
+        // EV Root CA), presented without its root.
+        var time = new DateTime(2024, 12, 06);
+        var chain = PresentedChain(DuoApiServerCert(), time, CertFromString(DUO_API_CERT_INTER));
+
+        Assert.True(DuoPinnerAt(time)(null, DuoApiServerCert(), chain, SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+}
+
+public class GeneratedChainPinningTest
+{
+    // These tests generate CAs at runtime, so no OS trust store contains them. The
+    // certificates carry no AIA extension, so the platform cannot download anything:
+    // whatever the chain reaches comes from what the server sent or from the anchors.
+
+    private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;
+    private const string ServerAuth = "1.3.6.1.5.5.7.3.1";
+    private const string ClientAuth = "1.3.6.1.5.5.7.3.2";
+
+    private sealed class Ca
+    {
+        public X500DistinguishedName Name;
+        public RSA Key;
+        public X509Certificate2 Cert;
+    }
+
+    private static byte[] NewSerial()
+    {
+        var serial = new byte[8];
+        new Random().NextBytes(serial);
+        serial[0] &= 0x7F;
+        return serial;
+    }
+
+    private static CertificateRequest CaRequest(X500DistinguishedName name, RSA key)
+    {
+        var req = new CertificateRequest(name, key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        req.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+        req.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
+        req.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(req.PublicKey, false));
+        return req;
+    }
+
+    private static X509SignatureGenerator Signer(Ca issuer)
+    {
+        return X509SignatureGenerator.CreateForRSA(issuer.Key, RSASignaturePadding.Pkcs1);
+    }
+
+    private static Ca CreateRoot(string name, DateTimeOffset notBefore, DateTimeOffset notAfter)
+    {
+        var ca = new Ca { Name = new X500DistinguishedName("CN=" + name), Key = RSA.Create(2048) };
+        ca.Cert = CaRequest(ca.Name, ca.Key).CreateSelfSigned(notBefore, notAfter);
+        return ca;
+    }
+
+    private static Ca CreateRoot(string name)
+    {
+        return CreateRoot(name, Now.AddDays(-60), Now.AddYears(1));
+    }
+
+    // A CA certificate for subject's name and key, signed by issuer. Used both for
+    // intermediates and for cross-signing an existing root.
+    private static X509Certificate2 CreateCaCert(Ca subject, Ca issuer, DateTimeOffset notBefore, DateTimeOffset notAfter)
+    {
+        return CaRequest(subject.Name, subject.Key).Create(issuer.Name, Signer(issuer), notBefore, notAfter, NewSerial());
+    }
+
+    private static Ca CreateIntermediate(string name, Ca issuer)
+    {
+        var ca = new Ca { Name = new X500DistinguishedName("CN=" + name), Key = RSA.Create(2048) };
+        ca.Cert = CreateCaCert(ca, issuer, Now.AddDays(-30), Now.AddMonths(6));
+        return ca;
+    }
+
+    private static X509Certificate2 CreateLeaf(Ca issuer, DateTimeOffset notBefore, DateTimeOffset notAfter, string eku = ServerAuth)
+    {
+        using (var key = RSA.Create(2048))
+        {
+            var req = new CertificateRequest("CN=api-test.duosecurity.com", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            req.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+            req.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(new OidCollection { new Oid(eku) }, false));
+            return req.Create(issuer.Name, Signer(issuer), notBefore, notAfter, NewSerial());
+        }
+    }
+
+    private static X509Certificate2 CreateLeaf(Ca issuer, string eku = ServerAuth)
+    {
+        return CreateLeaf(issuer, Now.AddDays(-1), Now.AddDays(30), eku);
+    }
+
+    // The chain the platform hands the callback: built from what the server sent.
+    private static X509Chain PresentedChain(X509Certificate2 leaf, params X509Certificate2[] sent)
+    {
+        var chain = new X509Chain();
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        foreach (var cert in sent)
+        {
+            chain.ChainPolicy.ExtraStore.Add(cert);
+        }
+        chain.Build(leaf);
+        return chain;
+    }
+
+    private static RemoteCertificateValidationCallback PinnerFor(params X509Certificate2[] anchors)
+    {
+        return new CertificatePinnerFactory(new X509Certificate2Collection(anchors)).GetPinner();
+    }
+
+    // Duo's real chain shape: leaf -> intermediate -> new root cross-signed by an old root,
+    // with no root sent. Only the old root is an anchor.
+    private sealed class CrossSignedChain
+    {
+        public Ca OldRoot;
+        public Ca NewRoot;
+        public X509Certificate2 NewRootCross;
+        public Ca Intermediate;
+        public X509Certificate2 Leaf;
+    }
+
+    private static CrossSignedChain CreateCrossSignedChain()
+    {
+        var c = new CrossSignedChain();
+        c.OldRoot = CreateRoot("Old Test Root");
+        c.NewRoot = CreateRoot("New Test Root");
+        c.NewRootCross = CreateCaCert(c.NewRoot, c.OldRoot, Now.AddDays(-30), Now.AddMonths(9));
+        c.Intermediate = CreateIntermediate("Test Issuing CA", c.NewRoot);
+        c.Leaf = CreateLeaf(c.Intermediate);
+        return c;
+    }
+
+    [Fact]
+    public void TestCrossSignedChainAccepted()
+    {
+        var c = CreateCrossSignedChain();
+        var chain = PresentedChain(c.Leaf, c.Intermediate.Cert, c.NewRootCross);
+
+        Assert.True(PinnerFor(c.OldRoot.Cert)(null, c.Leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+
+    [Fact]
+    public void TestAnchorOnSelfSignedFormAccepted()
+    {
+        // Anchoring on the self-signed form of the cross-signed root also completes the chain.
+        var c = CreateCrossSignedChain();
+        var chain = PresentedChain(c.Leaf, c.Intermediate.Cert, c.NewRootCross);
+
+        Assert.True(PinnerFor(c.NewRoot.Cert)(null, c.Leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+
+    [Fact]
+    public void TestPartialChainRejected()
+    {
+        // The server omits the intermediate, so the chain cannot reach the anchor.
+        var c = CreateCrossSignedChain();
+        var chain = PresentedChain(c.Leaf, c.NewRootCross);
+
+        Assert.False(PinnerFor(c.OldRoot.Cert)(null, c.Leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+
+    [Fact]
+    public void TestPinnedIntermediateNotAnAnchor()
+    {
+        // An anchor must end the chain. An intermediate whose issuer is unavailable leaves a
+        // PartialChain, which is rejected.
+        var c = CreateCrossSignedChain();
+        var chain = PresentedChain(c.Leaf, c.Intermediate.Cert, c.NewRootCross);
+
+        Assert.False(PinnerFor(c.Intermediate.Cert)(null, c.Leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+
+    [Fact]
+    public void TestNameMismatchRejected()
+    {
+        var c = CreateCrossSignedChain();
+        var chain = PresentedChain(c.Leaf, c.Intermediate.Cert, c.NewRootCross);
+
+        Assert.False(PinnerFor(c.OldRoot.Cert)(null, c.Leaf, chain,
+            SslPolicyErrors.RemoteCertificateChainErrors | SslPolicyErrors.RemoteCertificateNameMismatch));
+        Assert.False(PinnerFor(c.OldRoot.Cert)(null, c.Leaf, chain, SslPolicyErrors.RemoteCertificateNameMismatch));
+    }
+
+    [Fact]
+    public void TestCertificateNotAvailableRejected()
+    {
+        var c = CreateCrossSignedChain();
+        var chain = PresentedChain(c.Leaf, c.Intermediate.Cert, c.NewRootCross);
+
+        Assert.False(PinnerFor(c.OldRoot.Cert)(null, c.Leaf, chain, SslPolicyErrors.RemoteCertificateNotAvailable));
+    }
+
+    [Fact]
+    public void TestUnbundledRootRejected()
+    {
+        // The server sends its own self-signed root, which is not an anchor.
+        var anchor = CreateRoot("Pinned Test Root");
+        var other = CreateRoot("Unpinned Test Root");
+        var leaf = CreateLeaf(other);
+        var chain = PresentedChain(leaf, other.Cert);
+
+        Assert.False(PinnerFor(anchor.Cert)(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+        Assert.False(CertificatePinnerFactory.GetDuoCertificatePinner()(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+
+    [Fact]
+    public void TestRewrappedPinnedKeyRejected()
+    {
+        // The pinned root has expired. An attacker who obtained a leaf signed by the pinned
+        // key re-wraps that key in an unexpired CA certificate issued by their own root. The
+        // chain then contains the pinned key (an SPKI match), but it does not end at the
+        // pinned certificate, so the real certificate's validity cannot be bypassed.
+        var pinned = CreateRoot("Pinned Test Root", Now.AddYears(-2), Now.AddDays(-1));
+        var attacker = CreateRoot("Attacker Root");
+        var rewrapped = CreateCaCert(pinned, attacker, Now.AddDays(-30), Now.AddMonths(6));
+        var leaf = CreateLeaf(pinned);
+        var chain = PresentedChain(leaf, rewrapped, attacker.Cert);
+
+        Assert.False(PinnerFor(pinned.Cert)(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+
+    [Fact]
+    public void TestExpiredLeafRejected()
+    {
+        var root = CreateRoot("Pinned Test Root");
+        var leaf = CreateLeaf(root, Now.AddDays(-30), Now.AddDays(-1));
+        var chain = PresentedChain(leaf);
+
+        Assert.False(PinnerFor(root.Cert)(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+
+    [Fact]
+    public void TestExpiredIntermediateRejected()
+    {
+        var root = CreateRoot("Pinned Test Root");
+        var intermediate = new Ca { Name = new X500DistinguishedName("CN=Test Issuing CA"), Key = RSA.Create(2048) };
+        intermediate.Cert = CreateCaCert(intermediate, root, Now.AddDays(-30), Now.AddDays(-1));
+        var leaf = CreateLeaf(intermediate);
+        var chain = PresentedChain(leaf, intermediate.Cert);
+
+        Assert.False(PinnerFor(root.Cert)(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+    }
+
+    [Fact]
+    public void TestMissingServerAuthEkuRejected()
+    {
+        var c = CreateCrossSignedChain();
+        var leaf = CreateLeaf(c.Intermediate, ClientAuth);
+        var chain = PresentedChain(leaf, c.Intermediate.Cert, c.NewRootCross);
+
+        Assert.False(PinnerFor(c.OldRoot.Cert)(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
     }
 
     [Fact]
@@ -299,30 +501,27 @@ public class UntrustedRootPinningTest
     {
         // An attacker CA with the same name as the pinned root: the leaf names the pinned
         // root as issuer but is not signed by its key.
-        var root = CreateCa("Pinned Test Root");
-        var impostor = CreateCa("Pinned Test Root");
+        var root = CreateRoot("Pinned Test Root");
+        var impostor = CreateRoot("Pinned Test Root");
         var leaf = CreateLeaf(impostor);
-        var chain = BuildChain(leaf, root);
+        var chain = PresentedChain(leaf);
 
-        Assert.False(PinnerFor(root)(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+        Assert.False(PinnerFor(root.Cert)(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
     }
 
     [Fact]
     public void TestNonCaIssuerRejected()
     {
-        // A pinned root's end-entity certificate must not be usable to issue certificates.
-        var root = CreateCa("Pinned Test Root");
-        var key = RSA.Create(2048);
-        var req = new CertificateRequest("CN=Not A CA", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        // An end-entity certificate under the pinned root must not be usable to issue certificates.
+        var root = CreateRoot("Pinned Test Root");
+        var notACa = new Ca { Name = new X500DistinguishedName("CN=Not A CA"), Key = RSA.Create(2048) };
+        var req = new CertificateRequest(notACa.Name, notACa.Key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         req.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
-        var notACa = req.Create(root, Now.AddDays(-1), Now.AddDays(30), new byte[] { 0x01, 0x02, 0x03, 0x04 });
-        // CertificateRequest.Create refuses a non-CA issuer, so sign the leaf directly.
-        var leafReq = new CertificateRequest("CN=api-test.duosecurity.com", RSA.Create(2048), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        var leaf = leafReq.Create(notACa.SubjectName, X509SignatureGenerator.CreateForRSA(key, RSASignaturePadding.Pkcs1),
-                                  Now.AddDays(-1), Now.AddDays(30), new byte[] { 0x05, 0x06, 0x07, 0x08 });
-        var chain = BuildChain(leaf, root, notACa);
+        notACa.Cert = req.Create(root.Name, Signer(root), Now.AddDays(-1), Now.AddDays(30), NewSerial());
+        var leaf = CreateLeaf(notACa);
+        var chain = PresentedChain(leaf, notACa.Cert);
 
-        Assert.False(PinnerFor(root)(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
+        Assert.False(PinnerFor(root.Cert)(null, leaf, chain, SslPolicyErrors.RemoteCertificateChainErrors));
     }
 }
 
